@@ -17,6 +17,18 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 
 ---
+## [1.0.1] - 2025-07-18
+
+### Added
+### Changed
+### Deprecated
+### Removed
+### Fixed
+- **defect:** Update `goreleaser` configuration to use the author's username in the changelog.
+
+### Security
+
+---
 ## [1.0.0] - 2025-07-18
 
 ### Added
@@ -27,7 +39,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sixafter/aes-ctr-drbg/compare/80b4d9e2c5b6a5805bd11741af0eea3d5435889b...v1.0.0
 
 [MUST]: https://datatracker.ietf.org/doc/html/rfc2119
