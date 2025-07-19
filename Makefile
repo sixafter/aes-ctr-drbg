@@ -17,7 +17,7 @@ GO_MOD=$(GO_CMD) mod
 GO_LINT_CMD=golangci-lint run
 GO_WORK=$(GO_CMD) work
 GO_WORK_FILE := ./go.work
-FUZZTIME ?= 10s
+FUZZTIME ?= 20s
 
 .PHONY: all
 all: clean test
@@ -32,9 +32,9 @@ test: ## Execute unit tests
 
 .PHONY: fuzz
 fuzz: ## Run each Go fuzz test individually (10s per test)
-	@for fuzz in FuzzNewWithLength FuzzCustomAlphabet FuzzCustomGenerator FuzzRead; do \
+	@for fuzz in Fuzz_Reader_Read Fuzz_Reader_Concurrent Fuzz_NewReader_AllOptions Fuzz_NewReader_Personalization Fuzz_NewReader_Buffers; do \
 		echo "===> Fuzzing $$fuzz"; \
-		$(GO_TEST) -v -run=^$$ -fuzz=$$fuzz -fuzztime=$(FUZZTIME) || exit $$?; \
+		$(GO_TEST) -v -fuzz=$$fuzz -fuzztime=$(FUZZTIME) || exit $$?; \
 	done
 
 .PHONY: bench
