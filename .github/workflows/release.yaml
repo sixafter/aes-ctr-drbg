@@ -1,0 +1,82 @@
+# Copyright (c) 2024 Six After, Inc
+#
+# This source code is licensed under the Apache 2.0 License found in the
+# LICENSE file in the root directory of this source tree.
+
+# Ref: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+name: release
+
+on:
+  workflow_dispatch:
+  
+  push:
+    tags: ['v*']
+
+# Declare default permissions as read only.
+permissions: read-all
+
+jobs:
+  release:
+    # Ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#permissions
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
+      pull-requests: read
+
+    runs-on: ubuntu-latest
+    env:
+      flags: ""
+    steps:
+      - name: "Preamble"
+        run: |
+          whoami
+          echo github ref $GITHUB_REF
+          echo workflow $GITHUB_WORKFLOW
+          echo home $HOME
+          echo event name $GITHUB_EVENT_NAME
+          echo workspace $GITHUB_WORKSPACE
+
+          df -h
+
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common ca-certificates gnupg-agent curl build-essential make
+
+      # Ref: https://github.com/actions/checkout
+      - name: "Checkout Source"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Ref: https://github.com/actions/setup-go
+      - name: "Install Go"
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: "Compute Release Flags"
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: echo "flags=--snapshot" >> $GITHUB_ENV
+
+      # Ref: https://github.com/sigstore/cosign-installer
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.9.1
+
+      # Ref: https://github.com/anchore/sbom-action
+      - name: Generate SBOM via Syft
+        uses: anchore/sbom-action@v0
+        with:
+          format: spdx-json
+          artifact-name: sbom.spdx.json
+
+      # Ref: https://github.com/goreleaser/goreleaser-action
+      - name: "Release"
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean ${{ env.flags }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COSIGN_PASSWORD: '${{ secrets.AES_CTR_DRBG_COSIGN_PASSWORD }}'
+          COSIGN_PRIVATE_KEY: '${{ secrets.AES_CTR_DRBG_COSIGN_PRIVATE_KEY }}'
+          COSIGN_PUBLIC_KEY: '${{ secrets.AES_CTR_DRBG_COSIGN_PUBLIC_KEY }}'
