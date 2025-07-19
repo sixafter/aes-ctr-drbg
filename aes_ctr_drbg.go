@@ -132,6 +132,10 @@ func NewReader(opts ...Option) (Interface, error) {
 		return nil, fmt.Errorf("invalid key size %d bytes; must be 16, 24, or 32", cfg.KeySize)
 	}
 
+	if cfg.MaxInitRetries < 1 {
+		return nil, fmt.Errorf("invalid MaxInitRetries: must be >= 1")
+	}
+
 	// Step 3: Create a sync.Pool to manage DRBG instances for concurrent access.
 	// The pool's New function attempts to create a new DRBG, retrying up to MaxInitRetries times.
 	// If all attempts fail, the function panics, making failure explicit and visible.
