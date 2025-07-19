@@ -12,6 +12,8 @@ Date format: `YYYY-MM-DD`
 
 ### Added
 ### Changed
+- **defect:** Move OpenSSF Scorecard badge to Quality section of [README.md](../README.md).
+
 ### Deprecated
 ### Removed
 ### Fixed
