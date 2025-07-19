@@ -12,12 +12,22 @@ Date format: `YYYY-MM-DD`
 
 ### Added
 ### Changed
+### Deprecated
+### Removed
+### Fixed
+
+---
+## [1.2.0] - 2025-07-19
+
+### Added
+### Changed
 - **defect:** Move OpenSSF Scorecard badge to Quality section of [README.md](../README.md).
 - **risk:** Added fuzz tests.
 
 ### Deprecated
 ### Removed
 ### Fixed
+### Security
 
 ---
 ## [1.1.0] - 2025-07-18
@@ -53,7 +63,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sixafter/aes-ctr-drbg/compare/80b4d9e2c5b6a5805bd11741af0eea3d5435889b...v1.0.0
