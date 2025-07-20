@@ -404,6 +404,8 @@ func Test_CTRDRBG_Read_Shards(t *testing.T) {
 //
 // It is a functional AND allocation test for fillBlocks, and should remain passing as the code evolves.
 func Test_DRBG_FillBlocks_ZeroAlloc(t *testing.T) {
+	t.Parallel()
+
 	cfg := DefaultConfig()
 	d, _ := newDRBG(&cfg)
 	var v [16]byte
@@ -440,30 +442,35 @@ func Test_DRBG_FillBlocks_ZeroAlloc(t *testing.T) {
 	}
 }
 
-// TestDRBG_Read_Functional_Allow1Alloc verifies that drbg.Read produces non-zero,
-// unique cryptographic output, and allocates at most once per call.
+// Test_DRBG_Read_ZeroAlloc verifies that drbg.Read produces non-zero,
+// unique cryptographic output, and allocates zero times per call.
 //
 // The test ensures:
 //   - The buffer is always filled with non-zero, apparently random data.
 //   - Output changes across subsequent reads (counter is advancing).
-//   - Heap allocations are ≤ 1 per call (ideally 0, but up to 1 is accepted to allow sync.Pool/runtime bookkeeping).
+//   - Heap allocations are 0 per call (any allocation is a regression).
 //
 // This protects against accidental regression in allocation patterns or cryptographic soundness.
-func Test_DRBG_Read_OneAlloc(t *testing.T) {
+func Test_DRBG_Read_ZeroAlloc(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
 	cfg := DefaultConfig()
 	d, _ := newDRBG(&cfg)
 	buf := make([]byte, 32)
 
 	// Warm up, baseline
-	d.Read(buf)
+	_, err := d.Read(buf)
+	is.NoError(err)
 	baseline := make([]byte, len(buf))
 	copy(baseline, buf)
 
 	allocs := testing.AllocsPerRun(10000, func() {
-		d.Read(buf)
+		_, err = d.Read(buf)
+		is.NoError(err, "Read should not error")
 	})
-	if allocs > 1 {
-		t.Fatalf("unexpected allocations: %v (expected ≤ 1)", allocs)
+	if allocs != 0 {
+		t.Fatalf("unexpected allocations: %v (expected 0)", allocs)
 	}
 	// Buffer filled?
 	allZero := true

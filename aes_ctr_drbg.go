@@ -339,6 +339,21 @@ type drbg struct {
 	// It ensures that only one goroutine performs rekeying at a time.
 	// Uses atomic operations for concurrency safety.
 	rekeying uint32
+
+	// encV is a persistent [16]byte working buffer used as a session-local counter
+	// during output generation.
+	//
+	// On each call to Read, the current counter value (d.v) is copied into encV, which is
+	// then incremented and used for block generation throughout the request. Only after all
+	// output is produced is encV copied back into d.v, ensuring atomic and consistent counter
+	// advancement. This prevents partial or inconsistent counter updates if Read exits early
+	// due to errors or panics.
+	encV [16]byte
+
+	// tmp is a persistent [16]byte working buffer used during output generation.
+	// It holds the encrypted output for the final (partial) block in fillBlocks.
+	// This avoids repeated stack allocations and ensures maximum efficiency.
+	tmp [16]byte
 }
 
 // Read generates cryptographically secure random bytes and writes them into the provided slice b.
@@ -375,20 +390,19 @@ func (d *drbg) Read(b []byte) (int, error) {
 
 	// Lock the counter mutex to guarantee exclusive access to the evolving counter.
 	d.vMu.Lock()
-	var v [16]byte
 
 	// Copy the current counter value to a local variable. This snapshot forms the basis
 	// of the unique keystream for this read operation.
-	copy(v[:], d.v[:])
+	copy(d.encV[:], d.v[:])
 
 	// Fill the output buffer using the current cryptographic state and the local counter,
 	// incrementing the counter as output is produced. All counter increments are reflected
 	// in the local variable.
-	d.fillBlocks(b, st, &v)
+	d.fillBlocks(b, st, &d.encV)
 
 	// Persist the advanced counter back to the DRBG instance, ensuring subsequent reads
 	// continue the keystream seamlessly without overlap or repetition.
-	copy(d.v[:], v[:])
+	copy(d.v[:], d.encV[:])
 
 	// Unlock the mutex, allowing other callers to proceed.
 	d.vMu.Unlock()
@@ -409,31 +423,28 @@ func (d *drbg) Read(b []byte) (int, error) {
 }
 
 // fillBlocks fills the byte slice `b` with cryptographically secure, deterministic random data
-// generated from the provided DRBG state and a local working counter.
+// generated from the provided DRBG state and a caller-provided working counter.
 //
-// This method implements the core NIST SP 800-90A AES-CTR-DRBG output logic. It is **concurrency safe**
-// as it operates only on immutable state and caller-provided (local) counter. No DRBG struct fields are mutated.
+// This method implements the core NIST SP 800-90A AES-CTR-DRBG output logic. It is concurrency safe
+// as it operates only on immutable state and caller-provided (session-local) counter. No DRBG struct
+// fields are mutated during block generation.
 //
 // Parameters:
-//   - b   []byte:        Output buffer to be filled with random bytes. Must be at least 1 byte in length.
-//   - st  *state:    Immutable snapshot of the DRBG key, block cipher, and initial counter (V).
-//   - v   *[16]byte:     Local counter value (typically copied from DRBG.v). Advanced in place for each block.
+//   - b   []byte:      Output buffer to be filled with random bytes. Must be at least 1 byte in length.
+//   - st  *state:      Immutable snapshot of the DRBG key, block cipher, and initial counter (V).
+//   - v   *[16]byte:   Session-local working counter for this output operation. Advanced in place.
 //
 // Behavior:
 //   - Processes output in 16-byte (AES block size) chunks for maximal efficiency.
-//   - For each block, increments the counter, encrypts it, and writes the result to output.
+//   - For each block, increments the session-local counter, encrypts it, and writes the result to output.
 //   - Supports two strategies:
 //   - UseZeroBuffer: Encrypted blocks are staged in a reusable buffer before being copied out (reducing allocations).
 //   - Fast path: Output is written directly into the caller's buffer except for a possible tail partial block,
-//     which uses a temporary [16]byte buffer.
-//
-// Returns:
-//   - None. The output is written directly to the supplied buffer `b`, and the local counter `v` is incremented
-//     in place for each block produced.
+//     which uses the persistent drbg.tmp [16]byte buffer.
 //
 // Security:
 //   - Ensures every 16-byte block is generated with a unique counter value per NIST recommendations.
-//   - Never mutates DRBG fields or internal state directly.
+//   - Never mutates DRBG fields or global internal state directly.
 //
 // Panics:
 //   - Never panics under normal operation. Will panic only if AES block size invariants are violated
@@ -462,7 +473,7 @@ func (d *drbg) fillBlocks(b []byte, st *state, v *[16]byte) {
 				blockSize = remaining
 			}
 
-			// Advance the counter as required by CTR mode (one block per keystream segment).
+			// Advance the session-local counter as required by CTR mode (one block per keystream segment).
 			incV(v)
 
 			// Encrypt the incremented counter; write keystream into zero buffer.
@@ -485,10 +496,9 @@ func (d *drbg) fillBlocks(b []byte, st *state, v *[16]byte) {
 
 	// Handle remaining tail (if output is not a multiple of 16 bytes).
 	if tail := n - offset; tail > 0 {
-		var tmp [16]byte
 		incV(v)
-		st.block.Encrypt(tmp[:], v[:])
-		copy(b[offset:], tmp[:tail])
+		st.block.Encrypt(d.tmp[:], v[:])
+		copy(b[offset:], d.tmp[:tail])
 	}
 }
 
