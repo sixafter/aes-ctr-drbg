@@ -84,11 +84,23 @@ type Config struct {
 	// If set to zero, a default value of 2 seconds is used.
 	MaxRekeyBackoff time.Duration
 
+	// ReseedInterval is the minimum time duration between automatic reseeds from system entropy.
+	//
+	// When set (non-zero), the DRBG will automatically reseed after this interval elapses,
+	// regardless of key usage or bytes generated. Zero disables interval-based reseeding.
+	ReseedInterval time.Duration
+
 	// MaxBytesPerKey is the maximum number of bytes generated per key before triggering automatic rekeying.
 	//
 	// Rekeying after a fixed output window enforces forward secrecy and mitigates key exposure risk.
 	// If set to zero, a default value of 1 GiB (1 << 30) is used.
 	MaxBytesPerKey uint64
+
+	// ReseedRequests is the maximum number of output requests (calls to Read) allowed before forcing a reseed.
+	//
+	// When set (non-zero), the DRBG will automatically reseed after this many Read or ReadWithAdditionalInput calls.
+	// Zero disables reseed-on-request-count.
+	ReseedRequests uint64
 
 	// KeySize specifies the AES key length to use for this DRBG instance.
 	//
@@ -127,6 +139,28 @@ type Config struct {
 	// Automatic key rotation provides forward secrecy and aligns with cryptographic best practices.
 	// Defaults to true.
 	EnableKeyRotation bool
+
+	// PredictionResistance enables NIST SP 800-90A prediction resistance mode for this DRBG instance.
+	//
+	// When set to true, the DRBG will automatically reseed from fresh system entropy before every
+	// output generation (each call to Read or ReadWithAdditionalInput), as required for compliance
+	// with "prediction resistance" in Section 9.3 of SP 800-90A. This defeats state compromise
+	// extension and protects against backtracking even if the DRBG's internal state is exposed.
+	//
+	// When enabled:
+	//   - All additionalInput passed to ReadWithAdditionalInput or Reseed is ignored.
+	//   - Reseeding is performed before each output operation, guaranteeing that every call mixes in
+	//     new system entropy and cannot be predicted from previous outputs, even if internal state is known.
+	//
+	// When false (default), the DRBG operates in the normal mode, and reseeding occurs only at
+	// initialization, on demand, or after MaxBytesPerKey is exceeded (if key rotation is enabled).
+	//
+	// Set via Config directly, or by using the WithPredictionResistance functional option.
+	//
+	// Security rationale:
+	//   - Enables maximal resilience against state compromise and forward/backward prediction attacks.
+	//   - May increase system entropy usage and affect throughput in high-rate scenarios.
+	PredictionResistance bool
 
 	// UseZeroBuffer determines whether each Read operation uses a zero-filled buffer for AES-CTR output.
 	//
@@ -171,17 +205,18 @@ const (
 //	cfg := ctrdrbg.DefaultConfig()
 func DefaultConfig() Config {
 	return Config{
-		KeySize:           KeySize256,
-		MaxBytesPerKey:    defaultMaxBytes,
-		MaxInitRetries:    defaultInitRetries,
-		MaxRekeyAttempts:  defaultRekeyRetries,
-		MaxRekeyBackoff:   defaultMaxBackoff,
-		RekeyBackoff:      defaultRekeyBackoff,
-		EnableKeyRotation: false,
-		Personalization:   nil,
-		UseZeroBuffer:     false,
-		DefaultBufferSize: 0,
-		Shards:            runtime.GOMAXPROCS(0),
+		KeySize:              KeySize256,
+		MaxBytesPerKey:       defaultMaxBytes,
+		MaxInitRetries:       defaultInitRetries,
+		MaxRekeyAttempts:     defaultRekeyRetries,
+		MaxRekeyBackoff:      defaultMaxBackoff,
+		RekeyBackoff:         defaultRekeyBackoff,
+		EnableKeyRotation:    false,
+		Personalization:      nil,
+		UseZeroBuffer:        false,
+		DefaultBufferSize:    0,
+		Shards:               runtime.GOMAXPROCS(0),
+		PredictionResistance: false,
 	}
 }
 
@@ -192,85 +227,143 @@ func DefaultConfig() Config {
 // Example:
 //
 //	r, err := ctrdrbg.NewReader(
-//	    ctrdrbg.WithKeySize(32),
+//	    ctrdrbg.WithKeySize(ctrdrbg.KeySize256),
 //	    ctrdrbg.WithPersonalization([]byte("service-A")),
 //	)
 type Option func(*Config)
 
-// WithKeySize returns an Option that sets the AES key length using the KeySize enum.
+// WithKeySize returns an Option that sets the AES key size for this DRBG instance.
 //
-// Acceptable values are KeySize128, KeySize192, or KeySize256.
+// Acceptable values are KeySize128 (16 bytes), KeySize192 (24 bytes), or KeySize256 (32 bytes).
+// Any other value will cause NewReader to fail with an error at construction time.
+//
+// Example usage:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithKeySize(ctrdrbg.KeySize192))
 func WithKeySize(k KeySize) Option { return func(cfg *Config) { cfg.KeySize = k } }
 
-// WithMaxBytesPerKey returns an Option that sets the maximum output (in bytes) per key before rekeying.
+// WithMaxBytesPerKey returns an Option that sets the maximum number of bytes output per key before rekeying.
 //
-// Recommended to lower for higher security or compliance regimes.
+// This enforces a forward secrecy window: after MaxBytesPerKey random bytes are generated,
+// the DRBG automatically performs a rekey operation (if key rotation is enabled) to derive a new key
+// from fresh entropy. Lower this value to increase key rotation frequency for higher assurance.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithMaxBytesPerKey(1<<20)) // 1 MiB per key
 func WithMaxBytesPerKey(n uint64) Option { return func(cfg *Config) { cfg.MaxBytesPerKey = n } }
 
-// WithMaxInitRetries returns an Option that sets the maximum number of DRBG pool initialization retries.
+// WithMaxInitRetries returns an Option that sets the maximum number of attempts to initialize a DRBG instance
+// in the pool before failing.
 //
-// Use for customizing startup reliability and error handling.
+// Increase this value if your system occasionally fails to gather entropy or encounters transient cryptographic errors
+// at startup.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithMaxInitRetries(10))
 func WithMaxInitRetries(n int) Option { return func(cfg *Config) { cfg.MaxInitRetries = n } }
 
-// WithMaxRekeyAttempts returns an Option that sets the maximum number of retries allowed for asynchronous rekeying.
+// WithMaxRekeyAttempts returns an Option that sets the maximum number of attempts allowed for
+// asynchronous key rotation (rekey) in the DRBG.
 //
-// Applies exponential backoff (see WithMaxRekeyBackoff/WithRekeyBackoff).
+// If all rekey attempts fail, the DRBG continues using the previous state. Exponential backoff is applied
+// between attempts (see WithMaxRekeyBackoff and WithRekeyBackoff).
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithMaxRekeyAttempts(7))
 func WithMaxRekeyAttempts(n int) Option { return func(cfg *Config) { cfg.MaxRekeyAttempts = n } }
 
-// WithMaxRekeyBackoff returns an Option that sets the maximum duration for rekey exponential backoff.
+// WithMaxRekeyBackoff returns an Option that sets the maximum duration for exponential backoff between
+// failed rekey attempts.
 //
-// Limits time spent in failed rekey attempts.
+// When a rekey attempt fails, the DRBG waits with exponentially increasing intervals, up to this maximum duration,
+// before retrying. If set to zero, a default (2s) is used.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithMaxRekeyBackoff(5 * time.Second))
 func WithMaxRekeyBackoff(d time.Duration) Option {
 	return func(cfg *Config) { cfg.MaxRekeyBackoff = d }
 }
 
-// WithRekeyBackoff returns an Option that sets the initial backoff duration for rekey retries.
+// WithRekeyBackoff returns an Option that sets the initial backoff duration before retrying a failed rekey operation.
 //
-// Initial sleep interval before exponential growth on rekey failure.
+// The first failure sleeps this duration, doubling for each subsequent failure, up to MaxRekeyBackoff.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithRekeyBackoff(250 * time.Millisecond))
 func WithRekeyBackoff(d time.Duration) Option {
 	return func(cfg *Config) { cfg.RekeyBackoff = d }
 }
 
-// WithEnableKeyRotation returns an Option that enables or disables automatic key rotation.
+// WithEnableKeyRotation returns an Option that enables or disables automatic key rotation in the DRBG.
 //
-// Disable only if you understand and accept the security risk.
+// When enabled (true), the DRBG automatically performs a key rotation after MaxBytesPerKey bytes are output.
+// When disabled (false), key rotation is suppressed and the DRBG uses the original key indefinitely.
+//
+// For most use cases, leave this enabled for forward secrecy and NIST alignment. Disable only for
+// compliance testing or special-purpose scenarios.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithEnableKeyRotation(true))
 func WithEnableKeyRotation(enable bool) Option {
 	return func(cfg *Config) { cfg.EnableKeyRotation = enable }
 }
 
-// WithPersonalization returns an Option that sets a per-instance personalization string for DRBG state separation.
+// WithPersonalization returns an Option that sets a per-instance personalization string
+// to be XOR-ed into the DRBG's seed for domain separation.
 //
-// Rationale:
-//   - Ensures domain separation, i.e., two DRBG instances with the same system seed but different personalization
-//     strings will output completely different random streams.
-//   - Use for tenant, user, application, or service isolation.
+// Personalization ensures that two DRBG instances constructed with the same system seed but different
+// personalization values produce independent random streams, even if instantiated simultaneously.
+//
+// Use for tenant, application, service, or hardware isolation as required by your security model.
 //
 // Example:
 //
-//	ctrdrbg.NewReader(
-//	    ctrdrbg.WithPersonalization([]byte("tenant-42-prod")),
-//	)
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithPersonalization([]byte("my-tenant")))
 func WithPersonalization(p []byte) Option {
 	return func(cfg *Config) { cfg.Personalization = p }
 }
 
-// WithUseZeroBuffer returns an Option to enable or disable use of a zero-filled buffer for output.
+// WithUseZeroBuffer returns an Option that enables or disables use of a zero-filled buffer
+// for output in the DRBG.
+//
+// If enabled (true), the DRBG allocates and maintains a reusable zero-filled buffer
+// for CTR-mode output. If disabled (false), output is written directly to the destination buffer.
+//
+// This option primarily affects performance tuning; it does not impact cryptographic security.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithUseZeroBuffer(true))
 func WithUseZeroBuffer(enable bool) Option {
 	return func(cfg *Config) { cfg.UseZeroBuffer = enable }
 }
 
-// WithDefaultBufferSize returns an Option to set the default buffer size for zero-filled output.
+// WithDefaultBufferSize returns an Option that sets the initial capacity of the internal zero buffer
+// used for output if UseZeroBuffer is enabled.
+//
+// This can reduce allocations when large or repeated output requests are expected.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithDefaultBufferSize(4096))
 func WithDefaultBufferSize(n int) Option {
 	return func(cfg *Config) { cfg.DefaultBufferSize = n }
 }
 
-// WithShards sets the number of independent sync.Pool shards to use.
-// By default, a single shard is used. Sharding may reduce contention
-// under high concurrency, but can increase overhead on most systems.
+// WithShards returns an Option that sets the number of internal pool shards for the DRBG.
 //
-// Note: If n <= 0, the number of shards defaults to runtime.GOMAXPROCS(0),
-// which is useful in containerized environments.
-// See: https://github.com/golang/go/issues/73193
+// Sharding improves parallelism and reduces contention under high concurrency, at the cost of increased memory use.
+// If n <= 0, the shard count defaults to runtime.GOMAXPROCS(0).
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithShards(8))
 func WithShards(n int) Option {
 	return func(cfg *Config) {
 		if n <= 0 {
@@ -278,4 +371,43 @@ func WithShards(n int) Option {
 		}
 		cfg.Shards = n
 	}
+}
+
+// WithPredictionResistance returns an Option that enables or disables NIST SP 800-90A prediction resistance mode.
+//
+// When enabled (true), the DRBG reseeds from fresh system entropy before every output generation,
+// making the output stream robust against state compromise extension and backtracking attacks.
+//
+// This mode increases system entropy usage and can impact performance in high-throughput scenarios.
+// Use only when required by compliance or application policy.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithPredictionResistance(true))
+func WithPredictionResistance(enable bool) Option {
+	return func(cfg *Config) { cfg.PredictionResistance = enable }
+}
+
+// WithReseedInterval returns an Option that sets the minimum duration between automatic reseeds from system entropy.
+//
+// When set to a non-zero value, the DRBG will reseed after this interval elapses, even if no key rotation
+// or manual reseed occurs. Set to zero to disable interval-based reseeding.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithReseedInterval(30 * time.Minute))
+func WithReseedInterval(d time.Duration) Option {
+	return func(cfg *Config) { cfg.ReseedInterval = d }
+}
+
+// WithReseedRequests returns an Option that sets the maximum number of output requests (calls to Read)
+// allowed before forcing an automatic reseed from system entropy.
+//
+// Set to zero to disable reseed-on-request-count behavior.
+//
+// Example:
+//
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithReseedRequests(1000))
+func WithReseedRequests(n uint64) Option {
+	return func(cfg *Config) { cfg.ReseedRequests = n }
 }

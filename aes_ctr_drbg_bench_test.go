@@ -16,6 +16,8 @@ func (r *reader) syncPoolGetPut() {
 	r.pools[0].Put(dr)
 }
 
+// BenchmarkDRBG_SyncPool_Baseline_Concurrent measures the performance and contention
+// of sync.Pool DRBG instancing across varying goroutine counts.
 func BenchmarkDRBG_SyncPool_Baseline_Concurrent(b *testing.B) {
 	rdr, _ := NewReader()
 	goroutineCounts := []int{2, 4, 8, 16, 32, 64, 128}
@@ -36,6 +38,8 @@ func BenchmarkDRBG_SyncPool_Baseline_Concurrent(b *testing.B) {
 	}
 }
 
+// BenchmarkDRBG_Read_Serial measures sequential Read throughput and allocations
+// for varying buffer sizes.
 func BenchmarkDRBG_Read_Serial(b *testing.B) {
 	bufferSizes := []int{16, 32, 64, 256, 512, 4096, 16384}
 	for _, size := range bufferSizes {
@@ -53,6 +57,8 @@ func BenchmarkDRBG_Read_Serial(b *testing.B) {
 	}
 }
 
+// BenchmarkDRBG_Read_Concurrent measures concurrent Read throughput and allocations
+// for varying buffer sizes and goroutine counts.
 func BenchmarkDRBG_Read_Concurrent(b *testing.B) {
 	bufferSizes := []int{16, 32, 64, 256, 512, 4096, 16384}
 	goroutineCounts := []int{2, 4, 8, 16, 32, 64, 128}
@@ -76,6 +82,7 @@ func BenchmarkDRBG_Read_Concurrent(b *testing.B) {
 	}
 }
 
+// BenchmarkDRBG_Read_LargeSizes_Sequential benchmarks sequential Read performance for large buffer sizes.
 func BenchmarkDRBG_Read_LargeSizes_Sequential(b *testing.B) {
 	largeBufferSizes := []int{4096, 16384, 65536, 1048576}
 	for _, size := range largeBufferSizes {
@@ -93,6 +100,8 @@ func BenchmarkDRBG_Read_LargeSizes_Sequential(b *testing.B) {
 	}
 }
 
+// BenchmarkDRBG_Read_LargeSizes_Concurrent benchmarks concurrent Read performance
+// for large buffer sizes and multiple goroutines.
 func BenchmarkDRBG_Read_LargeSizes_Concurrent(b *testing.B) {
 	largeBufferSizes := []int{4096, 16384, 65536, 1048576}
 	goroutineCounts := []int{2, 4, 8, 16, 32, 64, 128}
@@ -116,6 +125,7 @@ func BenchmarkDRBG_Read_LargeSizes_Concurrent(b *testing.B) {
 	}
 }
 
+// BenchmarkDRBG_Read_VariableSizes benchmarks sequential Read performance across a range of typical buffer sizes.
 func BenchmarkDRBG_Read_VariableSizes(b *testing.B) {
 	variableBufferSizes := []int{16, 32, 64, 128, 256, 512, 1024, 2048, 4096}
 	for _, size := range variableBufferSizes {
@@ -133,6 +143,8 @@ func BenchmarkDRBG_Read_VariableSizes(b *testing.B) {
 	}
 }
 
+// BenchmarkDRBG_Read_VariableSizes_Concurrent benchmarks concurrent Read performance
+// across a range of typical buffer sizes and goroutine counts.
 func BenchmarkDRBG_Read_VariableSizes_Concurrent(b *testing.B) {
 	variableBufferSizes := []int{16, 32, 64, 128, 256, 512, 1024, 2048, 4096}
 	goroutineCounts := []int{2, 4, 8, 16, 32, 64, 128}
@@ -156,6 +168,8 @@ func BenchmarkDRBG_Read_VariableSizes_Concurrent(b *testing.B) {
 	}
 }
 
+// BenchmarkDRBG_Read_ExtremeSizes benchmarks Read performance for very large buffer sizes
+// (10MB, 50MB, 100MB) both serially and concurrently.
 func BenchmarkDRBG_Read_ExtremeSizes(b *testing.B) {
 	extremeBufferSizes := []int{10485760, 52428800, 104857600} // 10MB, 50MB, 100MB
 	for _, size := range extremeBufferSizes {
@@ -188,6 +202,41 @@ func BenchmarkDRBG_Read_ExtremeSizes(b *testing.B) {
 					}
 				})
 			})
+		}
+	}
+}
+
+// BenchmarkDRBG_Read_WithKeyRotation measures the performance and allocation impact
+// of frequent automatic key rotation (small MaxBytesPerKey).
+func BenchmarkDRBG_Read_WithKeyRotation(b *testing.B) {
+	cfg := DefaultConfig()
+	cfg.MaxBytesPerKey = 512 // small, so rotation is frequent
+	cfg.EnableKeyRotation = true
+
+	r, _ := NewReader(WithMaxBytesPerKey(cfg.MaxBytesPerKey), WithEnableKeyRotation(true))
+	buf := make([]byte, 256)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := r.Read(buf)
+		if err != nil {
+			b.Fatalf("Read failed: %v", err)
+		}
+	}
+}
+
+// BenchmarkDRBG_Read_PredictionResistance benchmarks Read throughput and allocation overhead
+// with NIST SP 800-90A prediction resistance enabled (reseeding every output).
+func BenchmarkDRBG_Read_PredictionResistance(b *testing.B) {
+	r, _ := NewReader(WithPredictionResistance(true))
+	buf := make([]byte, 64)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := r.Read(buf)
+		if err != nil {
+			b.Fatalf("Read failed: %v", err)
 		}
 	}
 }

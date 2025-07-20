@@ -171,3 +171,35 @@ func TestConfig_CombinedOptions(t *testing.T) {
 	is.False(cfg.EnableKeyRotation)
 	is.Equal([]byte("tenant42"), cfg.Personalization)
 }
+
+// TestConfig_WithReseedInterval verifies that WithReseedInterval sets the ReseedInterval field.
+func TestConfig_WithReseedInterval(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	WithReseedInterval(5 * time.Second)(&cfg)
+	is.Equal(5*time.Second, cfg.ReseedInterval, "WithReseedInterval should set ReseedInterval")
+}
+
+// TestConfig_WithReseedRequests verifies that WithReseedRequests sets the ReseedRequests field.
+func TestConfig_WithReseedRequests(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	WithReseedRequests(42)(&cfg)
+	is.Equal(uint64(42), cfg.ReseedRequests, "WithReseedRequests should set ReseedRequests")
+}
+
+// TestConfig_WithPredictionResistance verifies that WithPredictionResistance sets the PredictionResistance field.
+func TestConfig_WithPredictionResistance(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	WithPredictionResistance(true)(&cfg)
+	is.True(cfg.PredictionResistance, "WithPredictionResistance(true) should set PredictionResistance to true")
+	WithPredictionResistance(false)(&cfg)
+	is.False(cfg.PredictionResistance, "WithPredictionResistance(false) should set PredictionResistance to false")
+}
