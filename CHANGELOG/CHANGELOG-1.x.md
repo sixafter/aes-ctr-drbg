@@ -15,6 +15,21 @@ Date format: `YYYY-MM-DD`
 ### Deprecated
 ### Removed
 ### Fixed
+### Security
+
+---
+## [1.3.0] - 2025-07-19
+
+### Added
+### Changed
+- **debt**: Removed unnecessary heap and stack allocations in DRBG fast path
+  - Moved all `[16]byte` temporary block buffers to pre-allocated struct fields to eliminate stack allocations and heap escapes.
+  - Ensured all block encryption scratch space is reused via DRBG instance buffers rather than stack or ephemeral variables.
+
+### Deprecated
+### Removed
+### Fixed
+### Security
 
 ---
 ## [1.2.0] - 2025-07-19
@@ -63,7 +78,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.0.0...v1.0.1
