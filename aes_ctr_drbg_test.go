@@ -18,9 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Test_CTRDRBG_Read verifies that a single Read operation from a new DRBG instance
-// produces a buffer filled with nonzero, apparently random data. The test ensures
-// the DRBG is correctly seeded and generating cryptographically strong output on first use.
+// Test_CTRDRBG_Read ensures a new DRBG produces nonzero, apparently random output for a basic read.
 func Test_CTRDRBG_Read(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -43,8 +41,7 @@ func Test_CTRDRBG_Read(t *testing.T) {
 	is.False(allZeros, "Buffer should not be all zeros")
 }
 
-// Test_CTRDRBG_ReadZeroBytes checks that reading into a zero-length buffer
-// is a no-op and returns immediately, as required by the io.Reader contract.
+// Test_CTRDRBG_ReadZeroBytes verifies that reading a zero-length buffer returns immediately with no error.
 func Test_CTRDRBG_ReadZeroBytes(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -58,8 +55,7 @@ func Test_CTRDRBG_ReadZeroBytes(t *testing.T) {
 	is.Equal(0, n)
 }
 
-// Test_CTRDRBG_ReadMultipleTimes validates that consecutive Read calls from a DRBG
-// instance yield different outputs, ensuring the internal counter advances and no state is reused.
+// Test_CTRDRBG_ReadMultipleTimes checks that two consecutive Read calls from the same DRBG produce different outputs.
 func Test_CTRDRBG_ReadMultipleTimes(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -80,9 +76,7 @@ func Test_CTRDRBG_ReadMultipleTimes(t *testing.T) {
 	is.False(bytes.Equal(buf1, buf2), "Consecutive reads should differ")
 }
 
-// Test_CTRDRBG_ReadWithDifferentBufferSizes runs Read on a variety of buffer sizes (1–2KiB).
-// It ensures the returned buffer is always filled, and that the DRBG supports
-// all size requests without error or truncation.
+// Test_CTRDRBG_ReadWithDifferentBufferSizes checks that Read works correctly for a variety of buffer sizes.
 func Test_CTRDRBG_ReadWithDifferentBufferSizes(t *testing.T) {
 	t.Parallel()
 
@@ -113,9 +107,7 @@ func Test_CTRDRBG_ReadWithDifferentBufferSizes(t *testing.T) {
 	}
 }
 
-// Test_CTRDRBG_Concurrency verifies that the DRBG is safe under heavy concurrency
-// by launching 100 goroutines, each reading a buffer in parallel. The test asserts
-// all reads succeed and at least two buffers differ, confirming thread safety and uniqueness.
+// Test_CTRDRBG_Concurrency checks that the DRBG is thread-safe and outputs are unique under high concurrency.
 func Test_CTRDRBG_Concurrency(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -162,9 +154,7 @@ outer:
 	is.True(unique, "At least two buffers should differ")
 }
 
-// Test_CTRDRBG_Stream validates that reading a large (1 MiB) buffer using io.ReadFull
-// from the DRBG fills the entire buffer with nonzero, random data, ensuring correct
-// handling of large sequential requests.
+// Test_CTRDRBG_Stream verifies that large sequential reads (1 MiB) produce random, nonzero output.
 func Test_CTRDRBG_Stream(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -188,8 +178,7 @@ func Test_CTRDRBG_Stream(t *testing.T) {
 	is.False(allZeros, "Stream buffer should not be all zeros")
 }
 
-// Test_CTRDRBG_ReadAll checks that very large reads (10 KiB) succeed and the buffer
-// is filled with unique, nonzero data. This protects against length or edge-case errors.
+// Test_CTRDRBG_ReadAll checks that large reads (10 KiB) fill the buffer with unique, nonzero data.
 func Test_CTRDRBG_ReadAll(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -212,9 +201,7 @@ func Test_CTRDRBG_ReadAll(t *testing.T) {
 	is.False(allZeros, "ReadAll buffer should not be all zeros")
 }
 
-// Test_CTRDRBG_ReadConsistency performs 50 sequential reads from the same DRBG instance,
-// storing the output from each. It verifies every buffer is nonzero and ensures that
-// at least two reads differ, confirming uniqueness and liveness across multiple calls.
+// Test_CTRDRBG_ReadConsistency performs many sequential reads, ensuring output is always nonzero and not repeated.
 func Test_CTRDRBG_ReadConsistency(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -256,9 +243,7 @@ outer:
 	is.True(unique, "At least two buffers should differ")
 }
 
-// Test_CTRDRBG_AsyncRekey validates the asynchronous key rotation mechanism of the DRBG.
-// It configures a small MaxBytesPerKey to trigger a rekey, reads enough data to exceed the
-// threshold, then waits and verifies that the internal AES block is replaced and usage is reset.
+// Test_CTRDRBG_AsyncRekey tests that async key rotation occurs after a configured threshold and the key changes.
 func Test_CTRDRBG_AsyncRekey(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -301,9 +286,7 @@ func Test_CTRDRBG_AsyncRekey(t *testing.T) {
 	}
 }
 
-// Test_CTRDRBG_Personalization_Changes_Stream ensures that two DRBG instances constructed
-// with different personalization parameters yield distinct output streams. The test asserts
-// that the personalization string directly impacts the stream as required by NIST SP 800-90A.
+// Test_CTRDRBG_Personalization_Changes_Stream ensures different personalization strings yield unique output streams.
 func Test_CTRDRBG_Personalization_Changes_Stream(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -324,12 +307,7 @@ func Test_CTRDRBG_Personalization_Changes_Stream(t *testing.T) {
 	is.False(bytes.Equal(buf1, buf2), "Personalization should affect output")
 }
 
-// Test_CTRDRBG_Read_Shards verifies that a single call to Read only accesses
-// one shard pool out of many, regardless of the pool count. It does not
-// assert *which* shard is selected, as shardIndex is intentionally random.
-//
-// This test is table-driven: it runs the check with a variety of pool counts
-// to ensure correct behavior at boundaries and typical values.
+// Test_CTRDRBG_Read_Shards validates that a Read call only accesses a single shard in the pool.
 func Test_CTRDRBG_Read_Shards(t *testing.T) {
 	t.Parallel()
 
@@ -392,17 +370,7 @@ func Test_CTRDRBG_Read_Shards(t *testing.T) {
 	}
 }
 
-// TestDRBG_FillBlocks_ZeroAlloc_Functional verifies that drbg.fillBlocks produces
-// unique, non-zero cryptographically random output without any heap allocations.
-//
-// The test ensures:
-//   - The output buffer is filled with non-zero data (not all zeros).
-//   - Output changes across invocations (counter increments, no repeats).
-//   - No heap allocations occur per call, asserting high performance for this core routine.
-//
-// This is required for both performance-critical use and compliance with strict allocation budgets.
-//
-// It is a functional AND allocation test for fillBlocks, and should remain passing as the code evolves.
+// Test_DRBG_FillBlocks_ZeroAlloc checks fillBlocks for correct output and zero heap allocations.
 func Test_DRBG_FillBlocks_ZeroAlloc(t *testing.T) {
 	t.Parallel()
 
@@ -442,15 +410,7 @@ func Test_DRBG_FillBlocks_ZeroAlloc(t *testing.T) {
 	}
 }
 
-// Test_DRBG_Read_ZeroAlloc verifies that drbg.Read produces non-zero,
-// unique cryptographic output, and allocates zero times per call.
-//
-// The test ensures:
-//   - The buffer is always filled with non-zero, apparently random data.
-//   - Output changes across subsequent reads (counter is advancing).
-//   - Heap allocations are 0 per call (any allocation is a regression).
-//
-// This protects against accidental regression in allocation patterns or cryptographic soundness.
+// Test_DRBG_Read_ZeroAlloc ensures DRBG.Read returns unique, random data and performs zero heap allocations.
 func Test_DRBG_Read_ZeroAlloc(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -489,6 +449,7 @@ func Test_DRBG_Read_ZeroAlloc(t *testing.T) {
 	}
 }
 
+// Test_DRBG_Reader_Config verifies that a Reader reflects its config values as set via functional options.
 func Test_DRBG_Reader_Config(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -536,8 +497,7 @@ func Test_DRBG_Reader_Config(t *testing.T) {
 	is.Equal(want.Shards, got.Shards)
 }
 
-// TestDRBG_CounterOverflow Simulate the 128-bit counter rolling over (set `d.v` to `[0xff ... 0xff]`, read one block)
-// and ensure it wraps correctly per spec. While extremely unlikely in practice, it’s a security-critical edge case.
+// Test_DRBG_CounterOverflow simulates 128-bit counter overflow and checks for correct counter wraparound.
 func Test_DRBG_CounterOverflow(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -572,4 +532,65 @@ func Test_DRBG_CounterOverflow(t *testing.T) {
 		}
 	}
 	is.False(allZeros, "Output block should not be all zeros")
+}
+
+// Test_DRBG_ReseedInterval ensures that the DRBG reseeds itself after the configured interval.
+func Test_DRBG_ReseedInterval(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	cfg.ReseedInterval = 50 * time.Millisecond
+	d, err := newDRBG(&cfg)
+	is.NoError(err)
+
+	buf1 := make([]byte, 32)
+	_, err = d.Read(buf1)
+	is.NoError(err)
+	initialTime := d.lastReseedTime
+
+	// Wait just past the reseed interval
+	time.Sleep(55 * time.Millisecond)
+
+	buf2 := make([]byte, 32)
+	_, err = d.Read(buf2)
+	is.NoError(err)
+	afterTime := d.lastReseedTime
+
+	// Should have reseeded (time changed, outputs should differ)
+	is.True(afterTime.After(initialTime) || afterTime != initialTime, "Should have reseeded on interval")
+	is.False(bytes.Equal(buf1, buf2), "Outputs before/after reseed should differ")
+}
+
+// Test_DRBG_Reseed_RequestLimit checks that the DRBG reseeds after a set number of output requests.
+func Test_DRBG_Reseed_RequestLimit(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	cfg.ReseedRequests = 3 // Reseed every 3 requests
+	d, err := newDRBG(&cfg)
+	is.NoError(err)
+
+	blockSize := 32
+	buf := make([]byte, blockSize)
+
+	// Get baseline output
+	_, err = d.Read(buf)
+	is.NoError(err)
+	out1 := append([]byte(nil), buf...)
+
+	// Do enough reads to cross reseed threshold
+	for i := 0; i < int(cfg.ReseedRequests); i++ {
+		_, err = d.Read(buf)
+		is.NoError(err)
+	}
+
+	// Should have triggered a reseed internally on this call
+	_, err = d.Read(buf)
+	is.NoError(err)
+	out2 := append([]byte(nil), buf...)
+
+	// Outputs before and after reseed should differ (with overwhelming probability)
+	is.False(bytes.Equal(out1, out2), "Output after reseed should differ from before")
 }

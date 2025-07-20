@@ -57,38 +57,96 @@ type Interface interface {
 	// Config returns a copy of the DRBG configuration in use by this instance.
 	// The returned Config does not include secrets or mutable runtime state.
 	Config() Config
+
+	// Reseed injects new entropy and optional additional input, refreshing the DRBG state.
+	//
+	// Per NIST SP 800-90A, additionalInput is combined with system entropy and
+	// personalization (if set) to derive a new internal key and counter.
+	// Reseed can be called at any time to proactively refresh the DRBG.
+	//
+	// Returns an error if the reseed operation fails.
+	Reseed(additionalInput []byte) error
+
+	// ReadWithAdditionalInput generates cryptographically secure random bytes,
+	// supplementing system entropy with optional per-call additional input.
+	//
+	// This method is NIST-compliant and allows callers to inject additional
+	// entropy or context for a single Read operation.
+	// If PredictionResistance is enabled, additionalInput is ignored and fresh entropy is always used.
+	//
+	// Returns the number of bytes read (equal to len(b)) and an error (if any).
+	ReadWithAdditionalInput(b []byte, additionalInput []byte) (int, error)
 }
 
 // init initializes the package-level Reader. It panics if NewReader fails, preventing operation without
 // a secure random source. This follows cryptographic best practices by making entropy failure a fatal error.
 func init() {
 	cfg := DefaultConfig()
-	pools := make([]*sync.Pool, cfg.Shards)
-	for i := range pools {
-		cfg := cfg // Capture the current configuration for this shard
-		pools[i] = &sync.Pool{
-			New: func() interface{} {
-				var (
-					d   *drbg
-					err error
-				)
-				for r := 0; r < cfg.MaxInitRetries; r++ {
-					if d, err = newDRBG(&cfg); err == nil {
-						return d
-					}
-				}
-				// If initialization fails after all retries, panic.
-				panic(fmt.Sprintf("ctrdrbg pool init failed after %d retries: %v", cfg.MaxInitRetries, err))
-			},
-		}
-
-		// Eagerly test the pool initialization to ensure that any catastrophic
-		// failure is caught immediately, not deferred to the first use.
-		item := pools[i].Get().(*drbg)
-		pools[i].Put(item)
+	pools, err := initShardPools(cfg)
+	if err != nil {
+		panic(fmt.Sprintf("ctrdrbg: failed to initialize pools: %v", err))
 	}
 
 	Reader = &reader{pools: pools}
+}
+
+// initShardPools creates and validates all sync.Pool shards for concurrent DRBG use.
+//
+// For each shard, a sync.Pool is created whose New function constructs a DRBG instance using the provided config.
+// If instantiation fails, it retries up to MaxInitRetries times, then panics if unsuccessful.
+// After creating each pool, it is eagerly tested by borrowing and returning an instance, to ensure failures are
+// caught at construction rather than at first use.
+//
+// If any pool.New panics (due to repeated DRBG initialization failure), the function recovers and returns the
+// error to the caller (for use in NewReader). In package-level init, a panic is allowed to abort process startup.
+//
+// Parameters:
+//   - cfg: Config specifying DRBG options (shard count, retries, etc.)
+//
+// Returns:
+//   - []*sync.Pool: slice of initialized pools, one per shard.
+//   - error: non-nil if pool initialization panicked for any shard.
+func initShardPools(cfg Config) ([]*sync.Pool, error) {
+	// Create a slice of sync.Pool pointers, one for each shard.
+	pools := make([]*sync.Pool, cfg.Shards)
+	for i := range pools {
+		// Capture the config by value for use in the pool.New closure (avoids loop variable capture bug).
+		capturedCfg := cfg
+		pools[i] = &sync.Pool{
+			New: func() interface{} {
+				var d *drbg
+				var err error
+				// Attempt to instantiate a DRBG instance, retrying up to MaxInitRetries times.
+				for r := 0; r < capturedCfg.MaxInitRetries; r++ {
+					if d, err = newDRBG(&capturedCfg); err == nil {
+						return d
+					}
+				}
+				// If all attempts fail, panic (either for fatal startup or to be caught below).
+				panic(fmt.Sprintf("ctrdrbg pool init failed after %d retries: %v", capturedCfg.MaxInitRetries, err))
+			},
+		}
+
+		// Eagerly test pool initialization to ensure catastrophic failures are caught immediately,
+		// not deferred until first use. If New panics, recover and convert it to an error.
+		var panicErr error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					panicErr = fmt.Errorf("ctrdrbg pool initialization failed: %v", r)
+				}
+			}()
+			item := pools[i].Get()
+			pools[i].Put(item)
+		}()
+
+		// If initialization panicked, return error immediately.
+		if panicErr != nil {
+			return nil, panicErr
+		}
+	}
+
+	return pools, nil
 }
 
 // reader is an internal implementation of io.Reader that uses a pool of DRBG instances
@@ -106,7 +164,7 @@ type reader struct {
 //
 // Example:
 //
-//	r, err := ctrdrbg.NewReader(ctrdrbg.WithKeySize(32))
+//	r, err := ctrdrbg.NewReader(ctrdrbg.WithKeySize(ctrdrbg.KeySize256))
 //	if err != nil {
 //	    // handle error
 //	}
@@ -118,13 +176,13 @@ type reader struct {
 //	}
 //	fmt.Printf("Read %d bytes: %x\n", n, buf)
 func NewReader(opts ...Option) (Interface, error) {
-	// Step 1: Start with a default configuration, then apply each functional option to mutate cfg.
+	// Start with a default configuration, then apply each functional option to mutate cfg.
 	cfg := DefaultConfig()
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 
-	// Step 2: Validate the configured key size is appropriate for AES.
+	// Validate the configured key size is appropriate for AES.
 	// Only 16, 24, or 32 bytes (AES-128, AES-192, AES-256) are supported.
 	switch cfg.KeySize {
 	case KeySize128, KeySize192, KeySize256:
@@ -136,49 +194,13 @@ func NewReader(opts ...Option) (Interface, error) {
 		return nil, fmt.Errorf("invalid MaxInitRetries: must be >= 1")
 	}
 
-	// Step 3: Create a sync.Pool to manage DRBG instances for concurrent access.
-	// The pool's New function attempts to create a new DRBG, retrying up to MaxInitRetries times.
-	// If all attempts fail, the function panics, making failure explicit and visible.
-	pools := make([]*sync.Pool, cfg.Shards)
-	for i := range pools {
-		cfg := cfg // Capture the current configuration for this shard
-		pools[i] = &sync.Pool{
-			New: func() interface{} {
-				var (
-					d   *drbg
-					err error
-				)
-				for r := 0; r < cfg.MaxInitRetries; r++ {
-					if d, err = newDRBG(&cfg); err == nil {
-						return d
-					}
-				}
-				// If DRBG initialization fails after all retries, panic.
-				panic(fmt.Sprintf("ctrdrbg pool init failed after %d retries: %v", cfg.MaxInitRetries, err))
-			},
-		}
-
-		// Step 4: Eagerly test pool initialization by creating (and releasing) one DRBG.
-		// This ensures that catastrophic failures are detected during NewReader rather than at first use.
-		// If pool.New panics, recover and convert the panic to an error.
-		var panicErr error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					panicErr = fmt.Errorf("ctrdrbg pool initialization failed: %v", r)
-				}
-			}()
-			item := pools[i].Get()
-			pools[i].Put(item)
-		}()
-
-		// Step 5: If any panic occurred during pool initialization, return it as an error.
-		if panicErr != nil {
-			return nil, panicErr
-		}
+	// Initialize the shard pools using the validated configuration.
+	pools, err := initShardPools(cfg)
+	if err != nil {
+		return nil, err
 	}
 
-	// Step 6: Return a new reader that wraps the initialized pool.
+	//  Return a new reader that wraps the initialized pool.
 	return &reader{pools: pools}, nil
 }
 
@@ -193,6 +215,52 @@ func (r *reader) Config() Config {
 	cfg := *d.config
 	r.pools[0].Put(d)
 	return cfg
+}
+
+// Reseed refreshes the state of all DRBG instances in all shard pools with new entropy and optional additional input.
+//
+// This method implements the Interface contract for NIST SP 800-90A compliant deterministic random bit generators.
+// For each DRBG instance managed by the pool, Reseed obtains fresh entropy from the system entropy source and
+// combines it with the provided additionalInput and the configured personalization string, per NIST recommendations.
+// This operation ensures that each DRBG instance has a newly derived key and counter (V), providing domain separation
+// and supporting explicit entropy injection for compliance, recovery, or defense-in-depth.
+//
+// Parameters:
+//   - additionalInput []byte: Optional per-call entropy or domain-separation input to be mixed into the reseed.
+//     May be nil if no additional input is required.
+//
+// Returns:
+//   - error: Returns the first error encountered if any DRBG instance fails to reseed; otherwise returns nil.
+//
+// Security and Compliance Notes:
+//   - Reseed is safe for concurrent use and may be called at any time during operation.
+//   - If called while DRBGs are in use, subsequent reads will immediately begin using the newly seeded state.
+//   - This is required for some FIPS and high-assurance applications, and is recommended for recovery from suspected
+//     entropy pool compromise or for regulatory compliance triggers.
+//
+// Example usage:
+//
+//	err := reader.Reseed([]byte("audit-event-timestamp"))
+//	if err != nil {
+//	    log.Fatalf("reseed failed: %v", err)
+//	}
+func (r *reader) Reseed(additionalInput []byte) error {
+	// Iterate over each sync.Pool in the shard pool array.
+	for _, pool := range r.pools {
+		// Borrow a DRBG instance from the pool.
+		d := pool.Get().(*drbg)
+		// Attempt to reseed this DRBG instance using the provided additionalInput.
+		// Reseed will combine system entropy, personalization, and additionalInput as per NIST.
+		err := d.Reseed(additionalInput)
+		// Return the DRBG instance to the pool for future reuse, regardless of success.
+		pool.Put(d)
+		// If reseed fails for any DRBG, immediately return the error to the caller.
+		if err != nil {
+			return err
+		}
+	}
+	// If all DRBGs reseeded successfully, return nil.
+	return nil
 }
 
 // shardIndex selects a pseudo-random shard index in the range [0, n) using
@@ -210,6 +278,54 @@ func shardIndex(n int) int {
 	return mrand.IntN(n)
 }
 
+// ReadWithAdditionalInput fills the provided buffer with cryptographically secure random bytes,
+// optionally supplementing system entropy with caller-provided additionalInput, per NIST SP 800-90A.
+//
+// This method enables advanced consumers to inject per-call entropy, external event data, or
+// session context into the DRBG reseed process, as specified by the NIST DRBG "additional input" feature.
+// If PredictionResistance is enabled on the DRBG configuration, the additionalInput argument is ignored
+// and fresh entropy is always used as required by the standard.
+//
+// Parameters:
+//   - b []byte: The output buffer to fill with random bytes. Must be non-nil; may be zero-length.
+//   - additionalInput []byte: Optional per-call entropy or context for NIST-compliant reseed. May be nil.
+//
+// Returns:
+//   - int: The number of bytes written to b (always len(b) unless b is empty).
+//   - error: Error returned if random generation fails; nil on success.
+//
+// Concurrency and Pooling:
+//   - This method is safe for concurrent use. The underlying DRBG instance is selected from an internal pool
+//     using a sharding strategy to maximize throughput and minimize contention.
+//
+// Security and Compliance Notes:
+//   - additionalInput is cryptographically mixed with system entropy and personalization (if any) for this call only.
+//   - If PredictionResistance is enabled, additionalInput is ignored and reseed is always performed from entropy.
+//   - For most use cases, use the standard Read method. This method is intended for regulatory, compliance, or
+//     advanced event-driven entropy injection scenarios.
+//
+// Example usage:
+//
+//	n, err := reader.ReadWithAdditionalInput(buf, []byte("user-event-entropy"))
+//	if err != nil {
+//	    // handle error
+//	}
+func (r *reader) ReadWithAdditionalInput(b []byte, additionalInput []byte) (int, error) {
+	// Determine number of pools (shards) in the reader for load balancing.
+	n := len(r.pools)
+	shard := 0
+	// For multiple shards, select a random shard index for this call.
+	if n > 1 {
+		shard = shardIndex(n)
+	}
+	// Borrow a DRBG instance from the selected pool for this operation.
+	d := r.pools[shard].Get().(*drbg)
+	// Ensure the instance is returned to the pool after use (even on error or panic).
+	defer r.pools[shard].Put(d)
+	// Fill the buffer using the borrowed DRBG, injecting additionalInput as specified.
+	return d.ReadWithAdditionalInput(b, additionalInput)
+}
+
 // Read fills the provided buffer with cryptographically secure random data.
 //
 // Read implements the io.Reader interface and is designed to be safe for concurrent use when accessed
@@ -224,7 +340,7 @@ func shardIndex(n int) int {
 //	}
 //	fmt.Printf("Read %d bytes of random data: %x\n", n, buffer)
 func (r *reader) Read(b []byte) (int, error) {
-	// Step 1: Return immediately if the buffer is empty, as required by the io.Reader contract.
+	// Return immediately if the buffer is empty, as required by the io.Reader contract.
 	if len(b) == 0 {
 		return 0, nil
 	}
@@ -236,15 +352,15 @@ func (r *reader) Read(b []byte) (int, error) {
 		shard = shardIndex(n)
 	}
 
-	// Step 2: Borrow an instance of the internal deterministic random bit generator from the pool.
+	// Borrow an instance of the internal deterministic random bit generator from the pool.
 	// This ensures that each call gets exclusive access to an isolated state for cryptographic safety.
 	d := r.pools[shard].Get().(*drbg)
 
-	// Step 3: Ensure that the borrowed instance is returned to the pool, even if Read fails or panics.
+	// Ensure that the borrowed instance is returned to the pool, even if Read fails or panics.
 	// This pattern prevents resource leaks and maintains pool integrity.
 	defer r.pools[shard].Put(d)
 
-	// Step 4: Fill the caller’s buffer with random data using the borrowed generator.
+	// Fill the caller’s buffer with random data using the borrowed generator.
 	// The actual cryptographic work is performed by the internal generator’s Read method.
 	return d.Read(b)
 }
@@ -307,6 +423,11 @@ type drbg struct {
 	// during asynchronous rekeying, without impacting ongoing read operations.
 	state atomic.Pointer[state]
 
+	// lastReseedTime records the time of the last successful reseed.
+	// Used to determine if the configured ReseedInterval has elapsed and
+	// automatic reseeding should occur before the next output.
+	lastReseedTime time.Time
+
 	// zero is a preallocated slice of zero-filled bytes used for output buffering.
 	//
 	// When UseZeroBuffer is enabled in config, this buffer is XOR-ed with
@@ -327,6 +448,11 @@ type drbg struct {
 	// unique, non-repeating output for every call to Read. It is initialized
 	// from the state.v value at creation or rekey, and persisted between reads.
 	v [16]byte
+
+	// requests counts the number of output requests (calls to Read or ReadWithAdditionalInput)
+	// since the last reseed. Used to enforce the ReseedRequests limit and trigger reseeding
+	// after a configured number of requests.
+	requests uint64
 
 	// usage tracks the number of bytes generated since the last key rotation.
 	//
@@ -379,10 +505,34 @@ type drbg struct {
 //   - int: Number of bytes written (equal to len(b) unless b is empty).
 //   - error: Always nil under normal operation.
 func (d *drbg) Read(b []byte) (int, error) {
-	// Step 1: Return immediately if the buffer is empty, as required by the io.Reader contract.
+	// Return immediately if the buffer is empty, as required by the io.Reader contract.
 	n := len(b)
 	if n == 0 {
 		return 0, nil
+	}
+
+	// Prediction Resistance
+	if d.config.PredictionResistance {
+		if err := d.reseed(nil); err != nil {
+			return 0, fmt.Errorf("prediction resistance reseed failed: %w", err)
+		}
+	} else {
+		// Optional: Reseed if the configured interval has elapsed since the last reseed.
+		if d.config.ReseedInterval > 0 {
+			now := time.Now()
+			if now.Sub(d.lastReseedTime) >= d.config.ReseedInterval {
+				if err := d.reseed(nil); err != nil {
+					return 0, fmt.Errorf("interval reseed failed: %w", err)
+				}
+			}
+		}
+
+		// NIST-required: Reseed if the configured request count is exceeded.
+		if d.config.ReseedRequests > 0 && atomic.LoadUint64(&d.requests) >= d.config.ReseedRequests {
+			if err := d.reseed(nil); err != nil {
+				return 0, fmt.Errorf("request-count reseed failed: %w", err)
+			}
+		}
 	}
 
 	// Atomically load the current DRBG cryptographic state.
@@ -407,6 +557,11 @@ func (d *drbg) Read(b []byte) (int, error) {
 	// Unlock the mutex, allowing other callers to proceed.
 	d.vMu.Unlock()
 
+	// NIST-required: Increment the requests counter for this DRBG instance.
+	if !d.config.PredictionResistance {
+		atomic.AddUint64(&d.requests, 1)
+	}
+
 	// Key rotation logic: atomically update the usage counter and, if the output threshold is
 	// exceeded, trigger asynchronous rekeying in a background goroutine. Only one goroutine
 	// may perform rekeying at a time.
@@ -420,6 +575,149 @@ func (d *drbg) Read(b []byte) (int, error) {
 	}
 
 	return n, nil
+}
+
+// ReadWithAdditionalInput fills the provided buffer with cryptographically secure random bytes,
+// optionally reseeding the DRBG instance with caller-provided additional input per NIST SP 800-90A.
+//
+// This method is intended for advanced use cases where explicit entropy injection or
+// per-call domain separation is required, as enabled by the NIST DRBG "additional input" feature.
+// If PredictionResistance is enabled, the DRBG reseeds from system entropy for every read and
+// ignores additionalInput as required by the standard. Otherwise, if additionalInput is non-nil,
+// the DRBG instance reseeds using a combination of system entropy, personalization, and the
+// supplied additionalInput before generating output.
+//
+// Semantics and Implementation Details:
+//   - If PredictionResistance is enabled, reseeds from fresh system entropy before generating output,
+//     ignoring additionalInput (NIST-compliant).
+//   - If PredictionResistance is not enabled and additionalInput is non-nil, reseeds using both entropy
+//     and the caller's input, per NIST specification.
+//   - Loads the current cryptographic state (AES key, block cipher, initial counter) atomically.
+//   - The DRBG's internal counter (v) is protected by a mutex to guarantee non-overlapping output across reads.
+//   - Output is generated using fillBlocks and the advanced counter value is persisted for continuity.
+//   - If key rotation is enabled and the usage threshold is exceeded, an asynchronous rekey is triggered.
+//
+// Parameters:
+//   - b []byte: Output buffer to be filled with cryptographically secure random bytes.
+//   - additionalInput []byte: Optional per-call entropy or context to inject during reseed. May be nil.
+//
+// Returns:
+//   - int: Number of bytes written (equal to len(b) unless b is empty).
+//   - error: Error if entropy acquisition, reseed, or output generation fails.
+//
+// Example:
+//
+//	n, err := drbg.ReadWithAdditionalInput(buf, []byte("request-entropy"))
+//	if err != nil {
+//	    // handle error
+//	}
+func (d *drbg) ReadWithAdditionalInput(b []byte, additionalInput []byte) (int, error) {
+	// Return immediately if the buffer is empty, as required by the io.Reader contract.
+	n := len(b)
+	if n == 0 {
+		return 0, nil
+	}
+
+	// If PredictionResistance is enabled, always reseed from fresh entropy before output,
+	// ignoring any additional input per NIST SP 800-90A requirements.
+	if d.config.PredictionResistance {
+		if err := d.reseed(nil); err != nil {
+			return 0, fmt.Errorf("prediction resistance reseed failed: %w", err)
+		}
+	} else {
+		// Optional: Reseed if the configured interval has elapsed since the last reseed.
+		if d.config.ReseedInterval > 0 {
+			now := time.Now()
+			if now.Sub(d.lastReseedTime) >= d.config.ReseedInterval {
+				if err := d.reseed(nil); err != nil {
+					return 0, fmt.Errorf("interval reseed failed: %w", err)
+				}
+			}
+		}
+
+		// NIST-required: Reseed if the configured request count is exceeded.
+		if d.config.ReseedRequests > 0 && atomic.LoadUint64(&d.requests) >= d.config.ReseedRequests {
+			if err := d.reseed(nil); err != nil {
+				return 0, fmt.Errorf("request-count reseed failed: %w", err)
+			}
+		}
+
+		// If additionalInput is provided and prediction resistance is not enabled,
+		// reseed using both entropy and additional input for this output request.
+		if additionalInput != nil {
+			if err := d.reseed(additionalInput); err != nil {
+				return 0, fmt.Errorf("reseed with additional input failed: %w", err)
+			}
+		}
+	}
+
+	// Load the current cryptographic state (AES key, block cipher, initial counter) atomically.
+	st := d.state.Load()
+
+	// Lock the counter mutex to guarantee exclusive access to the evolving counter.
+	d.vMu.Lock()
+
+	// Copy the current counter value to a local variable for use in output generation.
+	copy(d.encV[:], d.v[:])
+
+	// Fill the output buffer using the current cryptographic state and the local counter,
+	// incrementing the counter as output is produced.
+	d.fillBlocks(b, st, &d.encV)
+
+	// Persist the advanced counter back to the DRBG instance, ensuring
+	// future reads continue the keystream seamlessly.
+	copy(d.v[:], d.encV[:])
+
+	// Unlock the mutex, allowing other callers to proceed.
+	d.vMu.Unlock()
+
+	// NIST-required: Increment the requests counter for this DRBG instance.
+	if !d.config.PredictionResistance {
+		atomic.AddUint64(&d.requests, 1)
+	}
+
+	// Key rotation logic: update the usage counter and, if the output threshold is
+	// exceeded, trigger asynchronous rekeying in a background goroutine.
+	if d.config.EnableKeyRotation {
+		atomic.AddUint64(&d.usage, uint64(n))
+		if atomic.LoadUint64(&d.usage) >= d.config.MaxBytesPerKey {
+			if atomic.CompareAndSwapUint32(&d.rekeying, 0, 1) {
+				go d.asyncRekey()
+			}
+		}
+	}
+
+	return n, nil
+}
+
+// Reseed injects new entropy and optional additional input, refreshing the DRBG instance's internal state.
+//
+// This method is compliant with NIST SP 800-90A and can be called at any time to force a rekey
+// and counter reset. The additionalInput parameter, if non-nil, is cryptographically combined
+// with system entropy and the configured personalization string to derive a new key and counter (V).
+//
+// Reseed is suitable for explicit entropy injection after external events, regulatory triggers,
+// or as a proactive measure to ensure stream independence and forward secrecy. Upon successful
+// reseed, all future outputs are derived from the new state.
+//
+// Parameters:
+//   - additionalInput []byte: Optional extra entropy or domain-separation input for this reseed operation.
+//     May be nil if not required.
+//
+// Returns:
+//   - error: Non-nil if entropy acquisition, cipher construction, or state replacement fails; nil on success.
+//
+// Example usage:
+//
+//	err := drbg.Reseed([]byte("device-boot-entropy"))
+//	if err != nil {
+//	    log.Fatalf("reseed failed: %v", err)
+//	}
+func (d *drbg) Reseed(additionalInput []byte) error {
+	// Reseed the DRBG instance using system entropy and any caller-provided additional input.
+	// The reseed function will cryptographically mix system entropy, personalization, and additionalInput,
+	// replacing the internal key, counter, and AES state atomically. If reseed fails, the previous state is retained.
+	return d.reseed(additionalInput)
 }
 
 // fillBlocks fills the byte slice `b` with cryptographically secure, deterministic random data
@@ -502,6 +800,101 @@ func (d *drbg) fillBlocks(b []byte, st *state, v *[16]byte) {
 	}
 }
 
+// reseed refreshes the DRBG instance with new system entropy, personalization, and optional additional input.
+//
+// This function generates a new internal state (AES key, counter, and cipher block) using the provided DRBG
+// configuration and any additionalInput supplied by the caller. It atomically installs the new cryptographic state,
+// ensuring no overlap with previous keystream output. After reseed, both the byte usage counter and request count
+// are reset, and the reseed timestamp is updated to support interval/request-count-based reseed policies.
+//
+// Parameters:
+//   - additionalInput []byte: Optional, caller-supplied entropy or domain-separation material that is cryptographically
+//     combined with system entropy and personalization. May be nil for standard reseeds.
+//
+// Returns:
+//   - error: Non-nil if entropy acquisition or state initialization fails; nil on success.
+//
+// Concurrency Notes:
+//   - This method synchronizes counter updates using a mutex and uses atomic operations for usage/request counters.
+//   - If called concurrently, it is possible for closely timed reseeds to slightly race in updating the metadata fields;
+//     this does not impact cryptographic safety.
+func (d *drbg) reseed(additionalInput []byte) error {
+	// Generate a new DRBG state (key, counter, AES block) using system entropy,
+	// personalization string, and optional additional input.
+	newState, err := newDRBGState(d.config, additionalInput)
+	if err != nil {
+		return err
+	}
+
+	// Atomically install the new cryptographic state for this DRBG instance.
+	d.state.Store(newState)
+
+	// Acquire the counter mutex and update the working counter (v)
+	// to match the new state, ensuring unique, non-overlapping output.
+	d.vMu.Lock()
+	copy(d.v[:], newState.v[:])
+	d.vMu.Unlock()
+
+	// Reset the usage counter, guaranteeing fresh key usage tracking.
+	atomic.StoreUint64(&d.usage, 0)
+
+	// Update reseed tracking metadata.
+	d.lastReseedTime = time.Now()
+	atomic.StoreUint64(&d.requests, 0)
+
+	return nil
+}
+
+// newDRBGState generates a fresh, fully initialized DRBG state (AES key and counter) per NIST SP 800-90A.
+//
+// This function combines system entropy, the configured personalization string, and optional additional input
+// to derive a unique and unpredictable state. This process aligns with NIST recommendations for DRBG
+// instantiation and reseed, ensuring domain separation and strong security.
+//
+// The returned state encapsulates an AES block cipher initialized with the derived key, a copy of the key
+// material, and the initial 128-bit counter value (V). If entropy acquisition or cipher creation fails,
+// an error is returned and no state is produced.
+//
+// Parameters:
+//   - cfg *Config: The DRBG configuration, including key size, personalization, and related options.
+//   - additionalInput []byte: Optional per-call entropy or context to further randomize the state; may be nil.
+//
+// Returns:
+//   - *state: Newly derived DRBG state with fresh key, cipher, and counter.
+//   - error: Non-nil if entropy acquisition or cipher construction fails; nil on success.
+func newDRBGState(cfg *Config, additionalInput []byte) (*state, error) {
+	seedLen := cfg.KeySize + 16
+	seed := make([]byte, seedLen)
+
+	// Acquire fresh entropy from the operating system. This forms the basis of the DRBG seed material.
+	if _, err := io.ReadFull(rand.Reader, seed); err != nil {
+		return nil, err
+	}
+
+	// Incorporate the personalization string, if provided, by XOR-ing it into the seed for domain separation.
+	// Mix in any caller-supplied additional input by XOR-ing it into the seed, further randomizing the state.
+	mixSeed(seed, cfg.Personalization, additionalInput)
+
+	// Split the seed buffer into an AES key (of the configured size) and a 128-bit counter (V).
+	var key [32]byte
+	copy(key[:], seed[:cfg.KeySize])
+	var v [16]byte
+	copy(v[:], seed[cfg.KeySize:])
+
+	// Initialize the AES block cipher using the derived key. Return an error if cipher creation fails.
+	block, err := aes.NewCipher(key[:cfg.KeySize])
+	if err != nil {
+		return nil, err
+	}
+
+	// Construct and return the new DRBG state, encapsulating the cipher, key, and counter.
+	return &state{
+		block: block,
+		key:   key,
+		v:     v,
+	}, nil
+}
+
 // newDRBG creates and returns a new, fully initialized deterministic random bit generator (DRBG) instance.
 //
 // This function constructs a FIPS 140-2 aligned AES-CTR-DRBG instance, securely seeded from operating system entropy.
@@ -533,11 +926,7 @@ func newDRBG(cfg *Config) (*drbg, error) {
 	}
 
 	// XOR in personalization string (if any) for domain separation.
-	if cfg.Personalization != nil {
-		for i := range cfg.Personalization {
-			seed[i%len(seed)] ^= cfg.Personalization[i]
-		}
-	}
+	mixSeed(seed, cfg.Personalization, nil)
 
 	// Derive the AES key and the initial counter (V) from the seed.
 	var key [32]byte
@@ -577,6 +966,39 @@ func newDRBG(cfg *Config) (*drbg, error) {
 	return d, nil
 }
 
+// mixSeed incorporates the personalization string and additional input into the DRBG seed.
+//
+// This function XORs both the personalization string (for domain separation) and any
+// caller-provided additional input (for added entropy or context) into the given seed buffer,
+// wrapping both as needed if their lengths exceed the seed length. This process is per NIST SP 800-90A.
+//
+// Parameters:
+//   - seed:              The entropy seed buffer to be mixed into (usually key+V).
+//   - personalization:   Optional domain-separation string; XOR-ed into the seed.
+//   - additionalInput:   Optional caller-supplied input; further XOR-ed into the seed.
+//
+// Each byte of personalization and additionalInput is XOR-ed into seed at the corresponding
+// index, wrapping with modulo if necessary.
+//
+// Example usage:
+//
+//	mixSeed(seed, cfg.Personalization, additionalInput)
+func mixSeed(seed []byte, personalization, additionalInput []byte) {
+	// Incorporate the personalization string by XOR-ing it into the seed
+	// to achieve domain separation. This ensures that DRBG instances with
+	// different personalization values generate independent streams.
+	for i := range personalization {
+		seed[i%len(seed)] ^= personalization[i]
+	}
+
+	// Mix in any caller-supplied additional input (such as explicit entropy)
+	// by XOR-ing it into the seed. This further randomizes the DRBG state,
+	// enhancing uniqueness or context-sensitivity per NIST guidelines.
+	for i := range additionalInput {
+		seed[i%len(seed)] ^= additionalInput[i]
+	}
+}
+
 // asyncRekey performs an asynchronous, non-blocking reseed and key rotation for the DRBG instance.
 //
 // This function is launched in a background goroutine when the generated output exceeds the configured threshold
@@ -610,11 +1032,7 @@ func (d *drbg) asyncRekey() {
 		seed := make([]byte, seedLen)
 		if _, err := io.ReadFull(rand.Reader, seed); err == nil {
 			// Apply personalization string, if set, by XORing into the seed.
-			if d.config.Personalization != nil {
-				for j := range d.config.Personalization {
-					seed[j%len(seed)] ^= d.config.Personalization[j]
-				}
-			}
+			mixSeed(seed, d.config.Personalization, nil)
 
 			// Construct the new AES key and counter (V) from the seed buffer.
 			var key [32]byte

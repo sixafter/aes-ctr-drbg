@@ -214,3 +214,131 @@ func Fuzz_NewReader_Buffers(f *testing.F) {
 		is.Equal(32, n, "short read")
 	})
 }
+
+func Fuzz_ReadWithAdditionalInput(f *testing.F) {
+	f.Add(32, []byte("entropy1"))
+	f.Add(16, []byte(nil))
+	f.Add(64, []byte("another-entropy-value"))
+
+	f.Fuzz(func(t *testing.T, bufSize int, addIn []byte) {
+		t.Parallel()
+		is := assert.New(t)
+
+		if bufSize < 0 || bufSize > 4096 {
+			return
+		}
+		r, err := NewReader()
+		if err != nil {
+			return
+		}
+		buf := make([]byte, bufSize)
+		n, err := r.ReadWithAdditionalInput(buf, addIn)
+		is.NoError(err, "ReadWithAdditionalInput failed")
+		is.Equal(bufSize, n, "short read")
+		if bufSize > 0 {
+			// Ensure not all zeros (statistically, not guaranteed but good quick check)
+			zeros := true
+			for _, b := range buf {
+				if b != 0 {
+					zeros = false
+					break
+				}
+			}
+			is.False(zeros, "all zero output")
+		}
+	})
+}
+
+func Fuzz_Reseed_Concurrency(f *testing.F) {
+	f.Add([]byte("input1"))
+	f.Add([]byte{})
+	f.Fuzz(func(t *testing.T, addIn []byte) {
+		t.Parallel()
+		r, err := NewReader()
+		if err != nil {
+			return
+		}
+		const n = 10
+		done := make(chan struct{}, n)
+		for i := 0; i < n; i++ {
+			go func() {
+				_ = r.Reseed(addIn)
+				done <- struct{}{}
+			}()
+		}
+		for i := 0; i < n; i++ {
+			<-done
+		}
+		// No assertion: not crashing is the property.
+	})
+}
+
+func Fuzz_Counter_Overflow(f *testing.F) {
+	// Add edge cases: (idx, val)
+	f.Add(15, byte(255))
+	f.Add(0, byte(0))
+	f.Add(7, byte(127))
+	f.Add(3, byte(1))
+
+	f.Fuzz(func(t *testing.T, idx int, val byte) {
+		t.Parallel()
+		is := assert.New(t)
+		cfg := DefaultConfig()
+		d, err := newDRBG(&cfg)
+		if err != nil {
+			return
+		}
+		if idx >= 0 && idx < len(d.v) {
+			// Set counter to all 0xff, then set one index to val
+			for i := range d.v {
+				d.v[i] = 0xff
+			}
+			d.v[idx] = val
+			buf := make([]byte, 16)
+			_, err := d.Read(buf)
+			is.NoError(err)
+		}
+	})
+}
+
+func Fuzz_Config_FunctionalOptions_Combinatorics(f *testing.F) {
+	f.Add(32, true, true, 128, 7, 42, 100, []byte("domain"), 1)
+	f.Fuzz(func(t *testing.T,
+		bufSz int, rot, zero bool, keySz int, maxInit, maxRekey, rekeyB int, pers []byte, mode int,
+	) {
+		t.Parallel()
+		is := assert.New(t)
+
+		if bufSz < 0 || bufSz > 1<<20 {
+			return
+		}
+		var k KeySize
+		switch keySz % 3 {
+		case 0:
+			k = KeySize128
+		case 1:
+			k = KeySize192
+		default:
+			k = KeySize256
+		}
+		opts := []Option{
+			WithKeySize(k),
+			WithEnableKeyRotation(rot),
+			WithUseZeroBuffer(zero),
+			WithDefaultBufferSize(bufSz),
+			WithMaxInitRetries(maxInit),
+			WithMaxRekeyAttempts(maxRekey),
+			WithRekeyBackoff(time.Duration(rekeyB) * time.Millisecond),
+			WithMaxRekeyBackoff(time.Duration(maxRekey) * time.Millisecond),
+			WithPersonalization(pers),
+		}
+		r, err := NewReader(opts...)
+		if err != nil {
+			return
+		}
+		buf := make([]byte, 64)
+		n, err := r.Read(buf)
+		is.NoError(err)
+		is.Equal(64, n)
+	})
+}

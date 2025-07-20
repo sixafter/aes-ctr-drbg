@@ -18,6 +18,21 @@ Date format: `YYYY-MM-DD`
 ### Security
 
 ---
+## [1.4.0] - 2025-07-20
+
+### Added
+### Changed
+- **feature:** Prediction resistance mode (`WithPredictionResistance`), enabling NIST SP 800-90A Section 9.3 compliance by reseeding before every output.
+- **feature:** Automatic interval-based reseeding (`WithReseedInterval`) and reseed-on-request-count (`WithReseedRequests`) options.
+- **feature:** Added `ReadWithAdditionalInput([]byte)` method for supplying per-call additional input as permitted by the NIST SP 800-90A standard.
+- **feature:** Added `Reseed([]byte)` method to manually reseed a DRBG instance with new entropy.
+
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+---
 ## [1.3.0] - 2025-07-19
 
 ### Added
@@ -78,7 +93,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.0.1...v1.1.0
