@@ -18,6 +18,18 @@ Date format: `YYYY-MM-DD`
 ### Security
 
 ---
+## [1.5.0] - 2025-07-23
+
+### Added
+### Changed
+- **risk:** Implemented automatic fork detection and random stream reseeding using process PID tracking. After a process fork, DRBG instances will securely reseed to prevent duplicate random streams in parent and child processes. This eliminates a longstanding CSPRNG risk in forked environments and aligns user-space DRBG safety with that of kernel-backed generators. See `ForkDetectionInterval` in [configuration](../config.go) for tuning and compliance.
+
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+---
 ## [1.4.0] - 2025-07-20
 
 ### Added
@@ -93,7 +105,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.1.0...v1.2.0

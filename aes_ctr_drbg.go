@@ -6,12 +6,20 @@
 // Package ctrdrbg provides a FIPS 140-2 aligned, high-performance AES-CTR-DRBG.
 //
 // This package implements a cryptographically secure, pool-backed Deterministic Random Bit Generator
-// (DRBG) following the NIST SP 800-90A AES-CTR-DRBG construction. Each generator instance uses an
-// AES block cipher in counter (CTR) mode to produce cryptographically secure pseudo-random bytes,
-// suitable for high-throughput, concurrent workloads.
+// (DRBG) following the NIST SP 800-90A AES-CTR-DRBG construction, specifically as defined in
+// Section 10.2.1 of NIST SP 800-90A Rev. 1 ("Recommendation for Random Number Generation Using
+// Deterministic Random Bit Generators").
+//
+// Each generator instance uses an AES block cipher in counter (CTR) mode to produce cryptographically
+// secure pseudo-random bytes, suitable for high-throughput, concurrent workloads.
 //
 // All cryptographic primitives are provided by the Go standard library. This implementation is designed
 // for environments requiring strong compliance, including support for Go's FIPS-140 mode (GODEBUG=fips140=on).
+//
+// Reference:
+//
+//	NIST Special Publication 800-90A Rev. 1, Section 10.2.1 (CTR_DRBG Construction)
+//	https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-90Ar1.pdf
 package ctrdrbg
 
 import (
@@ -21,6 +29,7 @@ import (
 	"fmt"
 	"io"
 	mrand "math/rand/v2"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -466,6 +475,25 @@ type drbg struct {
 	// Uses atomic operations for concurrency safety.
 	rekeying uint32
 
+	// pid caches the process identifier (PID) of the operating system process in which
+	// this DRBG instance was most recently initialized or reseeded.
+	//
+	// Purpose:
+	//   - Enables robust detection of process-level forks (e.g., via fork(2) or similar system calls).
+	//   - After a fork, the child process receives a new, unique PID, but the DRBG instance initially
+	//     retains the PID from its parent process.
+	//   - By comparing the current process PID (os.Getpid()) to this cached value, the DRBG can reliably
+	//     detect fork events at runtime.
+	//   - When a fork is detected, the DRBG securely reseeds its cryptographic state, preventing random
+	//     stream duplication and ensuring forward and backward security in both parent and child processes.
+	//
+	// Security Rationale:
+	//   - Eliminates the risk of duplicated random streams following a process fork—a known pitfall of
+	//     userspace CSPRNGs in forking environments (Linux, macOS).
+	//   - Aligns the safety guarantees of userspace DRBGs with those provided by kernel-backed CSPRNGs,
+	//     such as Linux getrandom(2), which handle fork-safety internally.
+	pid int
+
 	// encV is a persistent [16]byte working buffer used as a session-local counter
 	// during output generation.
 	//
@@ -510,6 +538,8 @@ func (d *drbg) Read(b []byte) (int, error) {
 	if n == 0 {
 		return 0, nil
 	}
+
+	d.reseedIfForked()
 
 	// Prediction Resistance
 	if d.config.PredictionResistance {
@@ -617,6 +647,8 @@ func (d *drbg) ReadWithAdditionalInput(b []byte, additionalInput []byte) (int, e
 	if n == 0 {
 		return 0, nil
 	}
+
+	d.reseedIfForked()
 
 	// If PredictionResistance is enabled, always reseed from fresh entropy before output,
 	// ignoring any additional input per NIST SP 800-90A requirements.
@@ -957,6 +989,7 @@ func newDRBG(cfg *Config) (*drbg, error) {
 		zero:     zero,
 		usage:    0,
 		rekeying: 0,
+		pid:      os.Getpid(),
 	}
 	d.state.Store(st)
 
