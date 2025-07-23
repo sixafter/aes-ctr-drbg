@@ -203,3 +203,12 @@ func TestConfig_WithPredictionResistance(t *testing.T) {
 	WithPredictionResistance(false)(&cfg)
 	is.False(cfg.PredictionResistance, "WithPredictionResistance(false) should set PredictionResistance to false")
 }
+
+func TestConfig_WithForkDetectionInterval(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	WithForkDetectionInterval(42)(&cfg)
+	is.Equal(uint64(42), cfg.ForkDetectionInterval, "WithForkDetectionInterval should set ForkDetectionInterval")
+}

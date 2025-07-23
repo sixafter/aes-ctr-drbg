@@ -594,3 +594,22 @@ func Test_DRBG_Reseed_RequestLimit(t *testing.T) {
 	// Outputs before and after reseed should differ (with overwhelming probability)
 	is.False(bytes.Equal(out1, out2), "Output after reseed should differ from before")
 }
+
+// Test_DRBG_ForkDetectionInterval_Config checks that ForkDetectionInterval is settable and present in config.
+func Test_DRBG_ForkDetectionInterval_Config(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	cfg.ForkDetectionInterval = 17
+	d, err := newDRBG(&cfg)
+	is.NoError(err)
+
+	is.Equal(uint64(17), d.config.ForkDetectionInterval, "ForkDetectionInterval should match config value")
+
+	// Also test via functional option path.
+	rdr, err := NewReader(WithForkDetectionInterval(42))
+	is.NoError(err)
+	got := rdr.Config()
+	is.Equal(uint64(42), got.ForkDetectionInterval, "ForkDetectionInterval should be set via option")
+}
