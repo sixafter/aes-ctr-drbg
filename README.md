@@ -46,25 +46,25 @@ See [FIPS‑140.md](FIPS-140.md) for compliance, deployment, and configuration g
 
 ## Features
 
-* **Standards-Compliant Implementation**
+* **Standards-Compliant Implementation:**
   Implements NIST SP 800-90A, Revision 1 AES-CTR-DRBG using the Go standard library (`crypto/aes`, `crypto/cipher`). Supports 128-, 192-, and 256-bit keys. State and counter management strictly adhere to the specification.
 
-* **FIPS 140-2 Alignment**
+* **FIPS 140-2 Alignment:**
   Designed for use in FIPS 140-2 validated environments and compatible with Go’s FIPS 140 mode (`GODEBUG=fips140=on`). See [FIPS-140.md](FIPS-140.md) for platform guidance.
 
-* **Zero-Allocation Output Path**
+* **Zero-Allocation Output Path:**
   The DRBG is engineered for `0 allocs/op` in its standard `io.Reader` output path, enabling predictable resource usage and high throughput.
 
-* **Asynchronous Key Rotation**
+* **Asynchronous Key Rotation:**
   Supports automatic key rotation after a configurable number of bytes have been generated (`MaxBytesPerKey`). Rekeying occurs asynchronously with exponential backoff and configurable retry limits, reducing long-term key exposure.
 
-* **Prediction Resistance Mode**
+* **Prediction Resistance Mode:**
   Supports NIST SP 800-90A prediction resistance. When enabled, the DRBG reseeds from system entropy before every output, as required for state compromise resilience.
 
-* **Sharded Pooling for Concurrency**
+* **Sharded Pooling for Concurrency:**
   Internal state pooling can be sharded across multiple `sync.Pool` instances. The number of shards is configurable, allowing improved performance under concurrent workloads.
 
-* **Extensive Functional Configuration**
+* **Extensive Functional Configuration:**
   Exposes a comprehensive set of functional options, including:
 
   * AES key size (128/192/256-bit)
@@ -75,24 +75,25 @@ See [FIPS‑140.md](FIPS-140.md) for compliance, deployment, and configuration g
   * Buffer size controls
   * Key rotation and rekey backoff parameters
   * Prediction resistance
+  * Fork detection and reseeding
 
-* **Thread-Safe and Deterministic**
+* **Thread-Safe and Deterministic:**
   All DRBG instances are safe for concurrent use. Output is deterministic for a given seed and personalization.
 
-* **io.Reader Compatibility**
+* **io.Reader Compatibility:**
   Implements Go’s `io.Reader` interface for drop-in use as a secure random source.
 
-* **No External Dependencies**
+* **No External Dependencies:**
   Depends exclusively on the Go standard library for cryptographic operations.
 
-* **UUID Generation**
+* **UUID Generation:**
   Can be used as a cryptographically secure `io.Reader` with the [`google/uuid`](https://pkg.go.dev/github.com/google/uuid) package and similar libraries.
 
-* **Comprehensive Testing and Fuzzing**
+* **Comprehensive Testing and Fuzzing:**
   Includes property-based, fuzz, concurrency, and allocation tests to validate correctness, robustness, and allocation characteristics.
 
-* **Fork-Safety: Automatic detection and reseeding on process fork**
-  This library automatically detects process forks and reseeds in the child process to prevent random stream duplication. No manual action is required.
+* **Fork-Safety:**
+  Automatic detection and reseeding on process fork. This library automatically detects process forks and reseeds in the child process to prevent random stream duplication. No manual action is required.
 
 ## NIST SP 800-90A Compliance
 
@@ -463,9 +464,9 @@ Here's a summary of the benchmark results comparing the default random reader fo
 | v4 Concurrent (256 goroutines)      |        511.8  |         7.79  |         98.5%    |         16   |         16   |                1  |                1  |
 
 Notes:
-- “Default” refers to the baseline Go `crypto/rand` source.
-- “CTRDRBG” refers to your AES-CTR-DRBG implementation.
-- “% Faster (ns/op)” is computed as `100 * (Default - CTRDRBG) / Default`, rounded.
+- "Default" refers to the baseline Go `crypto/rand` source.
+- "CTRDRBG" refers to this AES-CTR-DRBG implementation.
+- "% Faster (ns/op)" is computed as `100 * (Default - CTRDRBG) / Default`, rounded.
 
 <details>
   <summary>Expand to see results</summary>
