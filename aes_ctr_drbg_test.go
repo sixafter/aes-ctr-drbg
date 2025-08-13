@@ -372,8 +372,6 @@ func Test_CTRDRBG_Read_Shards(t *testing.T) {
 
 // Test_DRBG_FillBlocks_ZeroAlloc checks fillBlocks for correct output and zero heap allocations.
 func Test_DRBG_FillBlocks_ZeroAlloc(t *testing.T) {
-	t.Parallel()
-
 	cfg := DefaultConfig()
 	d, _ := newDRBG(&cfg)
 	var v [16]byte
@@ -412,7 +410,6 @@ func Test_DRBG_FillBlocks_ZeroAlloc(t *testing.T) {
 
 // Test_DRBG_Read_ZeroAlloc ensures DRBG.Read returns unique, random data and performs zero heap allocations.
 func Test_DRBG_Read_ZeroAlloc(t *testing.T) {
-	t.Parallel()
 	is := assert.New(t)
 
 	cfg := DefaultConfig()
