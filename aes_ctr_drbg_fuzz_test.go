@@ -22,7 +22,6 @@ func Fuzz_Reader_Read(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, size int) {
-		t.Parallel()
 		is := assert.New(t)
 
 		if size < 0 || size > 65536 {
@@ -40,15 +39,19 @@ func Fuzz_Reader_Read(f *testing.F) {
 // For several buffer sizes, it spawns multiple goroutines that each perform a Read operation,
 // checking that no errors occur. Sizes outside the range [1, 16384] are skipped.
 func Fuzz_Reader_Concurrent(f *testing.F) {
-	f.Add(16)
-	f.Add(1024)
+	// Seed with a few realistic sizes
+	for _, s := range []int{16, 1024, 4096, 16384} {
+		f.Add(s)
+	}
+
 	f.Fuzz(func(t *testing.T, size int) {
-		t.Parallel()
 		is := assert.New(t)
 
 		if size < 1 || size > 16384 {
+			t.Skipf("slice size must be between 1 and 16384")
 			return
 		}
+
 		const N = 8
 		bufs := make([][]byte, N)
 		errs := make(chan error, N)
@@ -85,7 +88,6 @@ func Fuzz_NewReader_AllOptions(f *testing.F) {
 		personalization []byte,
 		mode int,
 	) {
-		t.Parallel()
 		is := assert.New(t)
 
 		// Defensive bounds for fuzz
@@ -176,7 +178,6 @@ func Fuzz_NewReader_Personalization(f *testing.F) {
 	f.Add(make([]byte, 64))
 
 	f.Fuzz(func(t *testing.T, p []byte) {
-		t.Parallel()
 		is := assert.New(t)
 
 		r, err := NewReader(WithPersonalization(p))
@@ -198,7 +199,6 @@ func Fuzz_NewReader_Buffers(f *testing.F) {
 		f.Add(sz)
 	}
 	f.Fuzz(func(t *testing.T, bufSize int) {
-		t.Parallel()
 		is := assert.New(t)
 
 		if bufSize < 0 || bufSize > 1<<24 {
@@ -221,7 +221,6 @@ func Fuzz_ReadWithAdditionalInput(f *testing.F) {
 	f.Add(64, []byte("another-entropy-value"))
 
 	f.Fuzz(func(t *testing.T, bufSize int, addIn []byte) {
-		t.Parallel()
 		is := assert.New(t)
 
 		if bufSize < 0 || bufSize > 4096 {
@@ -253,7 +252,6 @@ func Fuzz_Reseed_Concurrency(f *testing.F) {
 	f.Add([]byte("input1"))
 	f.Add([]byte{})
 	f.Fuzz(func(t *testing.T, addIn []byte) {
-		t.Parallel()
 		r, err := NewReader()
 		if err != nil {
 			return
@@ -281,7 +279,6 @@ func Fuzz_Counter_Overflow(f *testing.F) {
 	f.Add(3, byte(1))
 
 	f.Fuzz(func(t *testing.T, idx int, val byte) {
-		t.Parallel()
 		is := assert.New(t)
 		cfg := DefaultConfig()
 		d, err := newDRBG(&cfg)
@@ -306,7 +303,6 @@ func Fuzz_Config_FunctionalOptions_Combinatorics(f *testing.F) {
 	f.Fuzz(func(t *testing.T,
 		bufSz int, rot, zero bool, keySz int, maxInit, maxRekey, rekeyB int, pers []byte, mode int,
 	) {
-		t.Parallel()
 		is := assert.New(t)
 
 		if bufSz < 0 || bufSz > 1<<20 {

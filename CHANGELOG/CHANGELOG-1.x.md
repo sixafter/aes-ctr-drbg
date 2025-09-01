@@ -25,6 +25,8 @@ Date format: `YYYY-MM-DD`
 ### Changed
 - **debt:** Upgraded all dependencies to their latest stable versions.
 - **risk:** Updated copyright to reflect date range through present year.
+- **risk:** Removed `t.Parallel()` from fuzz tests as fuzzing already runs inputs in parallel. 
+  - The fuzz engine schedules many inputs concurrently across workers (bounded by CPUs / `-test.parallel`). Adding `t.Parallel()` makes each input’s subtest itself run in parallel with others—an unnecessary second layer of parallelism.
 
 ### Deprecated
 ### Removed
