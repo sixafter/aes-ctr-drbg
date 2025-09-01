@@ -1,6 +1,8 @@
-# This workflow uses actions that are not certified by GitHub. They are provided
-# by a third-party and are governed by separate terms of service, privacy
-# policy, and support documentation.
+# Copyright (c) 2024-2025 Six After, Inc
+#
+# This source code is licensed under the Apache 2.0 License found in the
+# LICENSE file in the root directory of this source tree.
+
 
 name: OSSF Supply Chain Security Scorecard
 on:
@@ -37,7 +39,7 @@ jobs:
     steps:
       # Ref: https://github.com/actions/checkout
       - name: "Checkout code"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
 

@@ -18,6 +18,22 @@ Date format: `YYYY-MM-DD`
 ### Security
 
 ---
+
+## [1.7.0] - 2025-09-01
+
+### Added
+### Changed
+- **debt:** Upgraded all dependencies to their latest stable versions.
+- **risk:** Updated copyright to reflect date range through present year.
+- **risk:** Removed `t.Parallel()` from fuzz tests as fuzzing already runs inputs in parallel. 
+  - The fuzz engine schedules many inputs concurrently across workers (bounded by CPUs / `-test.parallel`). Adding `t.Parallel()` makes each input’s subtest itself run in parallel with others—an unnecessary second layer of parallelism.
+
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+---
 ## [1.6.0] - 2025-08-13
 
 ### Added
@@ -119,7 +135,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.3.0...v1.4.0
