@@ -17,7 +17,7 @@ GO_MOD=$(GO_CMD) mod
 GO_LINT_CMD=golangci-lint run
 GO_WORK=$(GO_CMD) work
 GO_WORK_FILE := ./go.work
-FUZZTIME ?= 20s
+FUZZTIME ?= 25s
 
 .PHONY: all
 all: clean test
