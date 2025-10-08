@@ -610,3 +610,22 @@ func Test_DRBG_ForkDetectionInterval_Config(t *testing.T) {
 	got := rdr.Config()
 	is.Equal(uint64(42), got.ForkDetectionInterval, "ForkDetectionInterval should be set via option")
 }
+
+// Test_CTRDRBG_InitShardPools_Failure ensures that initShardPools returns an error
+// instead of panicking when all DRBG initialization attempts fail.
+// It uses an invalid KeySize to deterministically force newDRBG() to fail.
+func Test_CTRDRBG_InitShardPools_Failure(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	cfg.Shards = 2
+	cfg.MaxInitRetries = 2
+
+	// Force deterministic failure: invalid AES key size (AES supports 16, 24, 32 only)
+	cfg.KeySize = 15
+
+	pools, err := initShardPools(cfg)
+	is.Error(err, "initShardPools should return error on initialization failure")
+	is.Nil(pools, "pools should be nil when initialization fails")
+}
