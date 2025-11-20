@@ -19,6 +19,20 @@ Date format: `YYYY-MM-DD`
 
 ---
 
+## [1.14.0] - 2025-11-20
+
+### Added
+### Changed
+- **debt:** Upgraded all dependencies to their latest stable versions.
+
+### Deprecated
+### Removed
+### Fixed
+- **defect:** Fix [Issue #24](https://github.com/sixafter/aes-ctr-drbg/issues/24): v1.13.0 checksum conflict in golang proxy breaks build.
+### Security
+
+---
+
 ## [1.13.0] - 2025-11-07
 
 ### Added
@@ -216,7 +230,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.10.0...v1.11.0
