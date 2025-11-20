@@ -21,10 +21,12 @@ rm tmp/*.zip 2>/dev/null || true
 # ------------------------------------------------------------
 # Detect latest release (README method)
 # ------------------------------------------------------------
-TAG=$(curl -s https://api.github.com/repos/sixafter/aes-ctr-drbg/releases/latest | jq -r .tag_name)
-VERSION=${TAG#v}
+REPO_OWNER="sixafter"
+REPO_NAME="aes-ctr-drbg"
+MODULE="github.com/${REPO_OWNER}/${REPO_NAME}"
 
-MODULE="github.com/sixafter/aes-ctr-drbg"
+TAG=$(curl -s "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest" | jq -r .tag_name)
+VERSION=${TAG#v}
 
 echo "Latest release: $TAG (version: $VERSION)"
 
@@ -42,7 +44,7 @@ fi
 # ------------------------------------------------------------
 echo "Downloading GitHub tag archive..."
 curl -sSfL -o tmp/github.zip \
-  "https://github.com/sixafter/aes-ctr-drbg/archive/refs/tags/${TAG}.zip"
+  "https://github.com/${REPO_OWNER}/${REPO_NAME}/archive/refs/tags/${TAG}.zip"
 
 GITHUB_SHA=$($SHA256 tmp/github.zip | awk '{print $1}')
 echo "GitHub ZIP SHA256:  $GITHUB_SHA"
