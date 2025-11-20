@@ -157,6 +157,12 @@ If valid, Cosign will output:
 Verified OK
 ```
 
+## Verify Go module
+
+To validate that the Go module archive served by GitHub, go mod download, and the Go 
+proxy are all consistent, run the `module-verify` target. This performs a full cross-check 
+of the tag archive and module ZIPs to confirm they match byte-for-byte.
+
 ---
 
 ## Installation
