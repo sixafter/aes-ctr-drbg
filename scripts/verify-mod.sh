@@ -14,8 +14,12 @@ if is_windows; then
     exit 1
 fi
 
+# Ensure tmp directory exists
+mkdir -p tmp
+rm tmp/*.zip 2>/dev/null || true
+
 # ------------------------------------------------------------
-# Detect latest release (your exact README method)
+# Detect latest release (README method)
 # ------------------------------------------------------------
 TAG=$(curl -s https://api.github.com/repos/sixafter/aes-ctr-drbg/releases/latest | jq -r .tag_name)
 VERSION=${TAG#v}
@@ -25,7 +29,7 @@ MODULE="github.com/sixafter/aes-ctr-drbg"
 echo "Latest release: $TAG (version: $VERSION)"
 
 # ------------------------------------------------------------
-# Portable SHA-256 function (works on macOS + Linux)
+# Portable SHA-256 function (macOS + Linux)
 # ------------------------------------------------------------
 if command -v sha256sum >/dev/null 2>&1; then
   SHA256="sha256sum"
@@ -34,17 +38,17 @@ else
 fi
 
 # ------------------------------------------------------------
-# 1. GitHub Tag ZIP (this is what proxies ingest)
+# 1. GitHub Tag ZIP
 # ------------------------------------------------------------
 echo "Downloading GitHub tag archive..."
-curl -sSfL -o github.zip \
+curl -sSfL -o tmp/github.zip \
   "https://github.com/sixafter/aes-ctr-drbg/archive/refs/tags/${TAG}.zip"
 
-GITHUB_SHA=$($SHA256 github.zip | awk '{print $1}')
+GITHUB_SHA=$($SHA256 tmp/github.zip | awk '{print $1}')
 echo "GitHub ZIP SHA256:  $GITHUB_SHA"
 
 # ------------------------------------------------------------
-# 2. Direct go mod ZIP (local module cache)
+# 2. Direct go mod ZIP
 # ------------------------------------------------------------
 echo "Downloading go mod ZIP using direct mode..."
 
@@ -57,18 +61,18 @@ if [ ! -f "$MOD_ZIP_PATH" ]; then
   exit 1
 fi
 
-cp "$MOD_ZIP_PATH" gomod.zip
-GOMOD_SHA=$($SHA256 gomod.zip | awk '{print $1}')
+cp "$MOD_ZIP_PATH" tmp/gomod.zip
+GOMOD_SHA=$($SHA256 tmp/gomod.zip | awk '{print $1}')
 echo "go mod ZIP SHA256:  $GOMOD_SHA"
 
 # ------------------------------------------------------------
 # 3. Go Proxy ZIP
 # ------------------------------------------------------------
 echo "Downloading Go module proxy ZIP..."
-curl -sSfL -o proxy.zip \
+curl -sSfL -o tmp/proxy.zip \
   "https://proxy.golang.org/${MODULE}/@v/${TAG}.zip"
 
-PROXY_SHA=$($SHA256 proxy.zip | awk '{print $1}')
+PROXY_SHA=$($SHA256 tmp/proxy.zip | awk '{print $1}')
 echo "Proxy ZIP SHA256:   $PROXY_SHA"
 
 # ------------------------------------------------------------
