@@ -109,46 +109,44 @@ For a detailed mapping between the implementation and NIST SP 800-90A requiremen
 To verify the integrity of the release tarball, you can use Cosign to check the signature and checksums. Follow these steps:
 
 ```sh
-# Fetch the latest release tag from GitHub API (e.g., "v1.13.0")
+# Fetch the latest release tag from GitHub API (e.g., "v1.14.0")
 TAG=$(curl -s https://api.github.com/repos/sixafter/aes-ctr-drbg/releases/latest | jq -r .tag_name)
 
-# Remove leading "v" for filenames (e.g., "v1.13.0" -> "1.13.0")
+# Remove leading "v" for filenames (e.g., "v1.14.0" -> "1.14.0")
 VERSION=${TAG#v}
 
 # ---------------------------------------------------------------------
 # Verify the source archive using Sigstore bundles
 # ---------------------------------------------------------------------
 
-# Download the release tarball and its corresponding bundle
-curl -LO https://github.com/sixafter/aes-ctr-drbg/releases/download/${TAG}/aes-ctr-drbg-${VERSION}.tar.gz
-curl -LO https://github.com/sixafter/aes-ctr-drbg/releases/download/${TAG}/aes-ctr-drbg-${VERSION}.tar.gz.bundle.json
+# Download the release tarball and its signature bundle
+curl -LO "https://github.com/sixafter/aes-ctr-drbg/releases/download/${TAG}/aes-ctr-drbg-${VERSION}.tar.gz"
+curl -LO "https://github.com/sixafter/aes-ctr-drbg/releases/download/${TAG}/aes-ctr-drbg-${VERSION}.tar.gz.sigstore.json"
 
-# Verify the tarball with Cosign using your published public key
+# Verify the tarball with Cosign using the published public key
 cosign verify-blob \
-  --key https://raw.githubusercontent.com/sixafter/aes-ctr-drbg/main/cosign.pub \
-  --bundle aes-ctr-drbg-${VERSION}.tar.gz.bundle.json \
-  prng-chacha-${VERSION}.tar.gz
+  --key "https://raw.githubusercontent.com/sixafter/aes-ctr-drbg/main/cosign.pub" \
+  --bundle "aes-ctr-drbg-${VERSION}.tar.gz.sigstore.json" \
+  "aes-ctr-drbg-${VERSION}.tar.gz"
 
 # ---------------------------------------------------------------------
 # Verify the checksums manifest using Sigstore bundles
 # ---------------------------------------------------------------------
 
-# Download checksums.txt and its bundle
-curl -LO https://github.com/sixafter/aes-ctr-drbg/releases/download/${TAG}/checksums.txt
-curl -LO https://github.com/sixafter/aes-ctr-drbg/releases/download/${TAG}/checksums.txt.bundle.json
+curl -LO "https://github.com/sixafter/aes-ctr-drbg/releases/download/${TAG}/checksums.txt"
+curl -LO "https://github.com/sixafter/aes-ctr-drbg/releases/download/${TAG}/checksums.txt.sigstore.json"
 
-# Verify checksums.txt with Cosign using your public key
 cosign verify-blob \
-  --key https://raw.githubusercontent.com/sixafter/aes-ctr-drbg/main/cosign.pub \
-  --bundle checksums.txt.bundle.json \
-  checksums.txt
+  --key "https://raw.githubusercontent.com/sixafter/aes-ctr-drbg/main/cosign.pub" \
+  --bundle "checksums.txt.sigstore.json" \
+  "checksums.txt"
 
 # ---------------------------------------------------------------------
 # Confirm local artifact integrity
 # ---------------------------------------------------------------------
 
-# Compute and validate checksums locally
 shasum -a 256 -c checksums.txt
+
 ```
 
 If valid, Cosign will output:

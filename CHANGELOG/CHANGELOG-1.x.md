@@ -19,6 +19,22 @@ Date format: `YYYY-MM-DD`
 
 ---
 
+## [1.14.1] - 2025-11-20
+
+### Added
+- **risk**: Added signature verification make target to match the README instructions.
+- **risk:** Add go module verification make target to verify module checksums.
+
+### Changed
+### Deprecated
+### Removed
+### Fixed
+- **defect:** Fixed `README.md` instructions for verifying module checksums.
+
+### Security
+
+---
+
 ## [1.14.0] - 2025-11-20
 
 ### Added
@@ -230,7 +246,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.1...HEAD
+[1.14.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.11.0...v1.12.0
