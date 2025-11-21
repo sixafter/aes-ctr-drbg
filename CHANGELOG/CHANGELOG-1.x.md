@@ -19,7 +19,7 @@ Date format: `YYYY-MM-DD`
 
 ---
 
-## [1.14.4] - 2025-11-21
+## [1.14.5] - 2025-11-21
 
 ### Added
 - **debt:** Modify README with how AES-CTR-DRBG is used when FIPS mode is enabled.
@@ -28,7 +28,7 @@ Date format: `YYYY-MM-DD`
 ### Deprecated
 ### Removed
 ### Fixed
-- **defect:** Attempt to address GitHub issue [#24](https://github.com/sixafter/aes-ctr-drbg/issues/24).
+- **defect:** Fix issue [#24](https://github.com/sixafter/aes-ctr-drbg/issues/24) by adding verification to ensure the Go module ZIP served via `GOPROXY=direct` matches the ZIP served by `proxy.golang.org`.
 
 ### Security
 
@@ -261,8 +261,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.4...HEAD
-[1.14.4]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.1...v1.14.4
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.5...HEAD
+[1.14.5]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.1...v1.14.5
 [1.14.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.12.0...v1.13.0
