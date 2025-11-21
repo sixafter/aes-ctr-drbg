@@ -19,4 +19,4 @@ if is_windows; then
 fi
 
 rm -fr dist
-goreleaser --config .goreleaser.yaml release --snapshot
+goreleaser --config .goreleaser.yaml release --snapshot --skip=publish

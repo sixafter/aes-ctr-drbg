@@ -3,6 +3,11 @@
 #
 # This source code is licensed under the Apache 2.0 License found in the
 # LICENSE file in the root directory of this source tree.
+#!/bin/bash
+# Copyright (c) 2024-2025 Six After, Inc.
+#
+# This source code is licensed under the Apache 2.0 License found in the
+# LICENSE file in the root directory of this source tree.
 set -e
 
 __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,17 +23,29 @@ fi
 mkdir -p tmp
 rm tmp/*.zip 2>/dev/null || true
 
-# ------------------------------------------------------------
-# Detect latest release (README method)
-# ------------------------------------------------------------
 REPO_OWNER="sixafter"
 REPO_NAME="aes-ctr-drbg"
 MODULE="github.com/${REPO_OWNER}/${REPO_NAME}"
 
-TAG=$(curl -s "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest" | jq -r .tag_name)
-VERSION=${TAG#v}
+# ------------------------------------------------------------
+# TAG selection logic:
+#   If TAG environment variable is provided, use it.
+#   Otherwise default to latest GitHub release (current behavior).
+# ------------------------------------------------------------
+if [ -n "${TAG:-}" ]; then
+    echo "Using provided TAG: ${TAG}"
+else
+    echo "No TAG provided, detecting latest GitHub release..."
+    TAG=$(curl -s "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest" | jq -r .tag_name)
+    if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+        echo "[ERROR] Could not detect latest release tag from GitHub." >&2
+        exit 1
+    fi
+fi
 
-echo "Latest release: $TAG (version: $VERSION)"
+VERSION=${TAG#v}
+echo "Verifying tag: $TAG (version: $VERSION)"
+echo
 
 # ------------------------------------------------------------
 # Portable SHA-256 function (macOS + Linux)
@@ -40,7 +57,7 @@ else
 fi
 
 # ------------------------------------------------------------
-# 1. GitHub Tag ZIP
+# 1. GitHub Tag ZIP (Human-facing)
 # ------------------------------------------------------------
 echo "Downloading GitHub tag archive..."
 curl -sSfL -o tmp/github.zip \
@@ -87,9 +104,20 @@ echo "go mod : $GOMOD_SHA"
 echo "Proxy  : $PROXY_SHA"
 echo
 
-if [ "$GITHUB_SHA" != "$GOMOD_SHA" ] || [ "$GITHUB_SHA" != "$PROXY_SHA" ]; then
-  echo "ERROR: CHECKSUM MISMATCH DETECTED!"
+# The authoritative comparison: direct vs proxy
+if [ "$GOMOD_SHA" != "$PROXY_SHA" ]; then
+  echo "[ERROR] Go module ZIP mismatch between direct and proxy!"
   exit 1
+fi
+
+echo "✔ Go module ZIP is consistent across direct and proxy."
+
+# GitHub tag ZIP is informational (not authoritative)
+if [ "$GITHUB_SHA" != "$GOMOD_SHA" ]; then
+  echo "⚠ WARNING: GitHub's UI ZIP does NOT match the Go module ZIP."
+  echo "  This is normal: GitHub generates tag archives separately."
+else
+  echo "✔ GitHub tag ZIP matches module ZIP (rare but OK)."
 fi
 
 echo "Go module archive is fully reproducible across GitHub, direct, and proxy."
