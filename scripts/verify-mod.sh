@@ -110,9 +110,9 @@ echo
 echo "=============================================================="
 echo "CHECKSUM COMPARISON"
 echo "=============================================================="
-printf "GitHub UI ZIP (human-facing):   %s\n" "$GITHUB_UI_SHA"
+printf "GitHub UI ZIP (human-facing)......: %s\n" "$GITHUB_UI_SHA"
 printf "Direct module ZIP (GOPROXY=direct): %s\n" "$DIRECT_SHA"
-printf "Go PROXY ZIP (checksum DB):     %s\n" "$PROXY_SHA"
+printf "Go PROXY ZIP (checksum DB)........: %s\n" "$PROXY_SHA"
 echo
 
 # ---------------------------------------------------------------------------
