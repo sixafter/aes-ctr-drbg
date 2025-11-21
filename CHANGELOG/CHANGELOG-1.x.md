@@ -12,6 +12,8 @@ Date format: `YYYY-MM-DD`
 
 ### Added
 ### Changed
+- **debt:** Modified README to include examples of how AES-CTR-DRBG is used by [NanoID](https://github.com/sixafter/nanoid) when FIPS mode is enabled.
+
 ### Deprecated
 ### Removed
 ### Fixed
