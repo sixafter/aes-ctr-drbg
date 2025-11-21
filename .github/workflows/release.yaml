@@ -9,8 +9,8 @@ name: release
 on:
   workflow_dispatch:
   
-  push:
-    tags: ['v*']
+  #push:
+  #  tags: ['v*']
 
 # Declare default permissions as read only.
 permissions: read-all
