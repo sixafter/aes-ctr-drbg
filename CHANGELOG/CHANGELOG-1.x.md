@@ -12,11 +12,24 @@ Date format: `YYYY-MM-DD`
 
 ### Added
 ### Changed
-- **debt:** Modified README to include examples of how AES-CTR-DRBG is used by [NanoID](https://github.com/sixafter/nanoid) when FIPS mode is enabled.
-
 ### Deprecated
 ### Removed
 ### Fixed
+### Security
+
+---
+
+## [1.14.2] - 2025-11-21
+
+### Added
+- **debt:** Modify README with how AES-CTR-DRBG is used when FIPS mode is enabled.
+
+### Changed
+### Deprecated
+### Removed
+### Fixed
+- **defect:** Attempt to address GitHub issue [#24](https://github.com/sixafter/aes-ctr-drbg/issues/24).
+
 ### Security
 
 ---
@@ -248,7 +261,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.1...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.2...HEAD
+[1.14.2]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.1...v1.14.2
 [1.14.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.12.0...v1.13.0
