@@ -12,7 +12,7 @@ on:
   push:
     tags: ['v*']
 
-# Declare default permissions as read only.
+# Declare default permissions as read-only.
 permissions: read-all
 
 jobs:
@@ -41,13 +41,13 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common ca-certificates gnupg-agent curl build-essential make
 
-      # Ref: https://github.com/actions/checkout
+      # See: https://github.com/actions/checkout
       - name: "Checkout Source"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      # Ref: https://github.com/actions/setup-go
+      # See: https://github.com/actions/setup-go
       - name: "Install Go"
         uses: actions/setup-go@v6
         with:
@@ -57,18 +57,18 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: echo "flags=--snapshot" >> $GITHUB_ENV
 
-      # Ref: https://github.com/sigstore/cosign-installer
+      # See: https://github.com/sigstore/cosign-installer
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.0.0
 
-      # Ref: https://github.com/anchore/sbom-action
+      # See: https://github.com/anchore/sbom-action
       - name: Generate SBOM via Syft
         uses: anchore/sbom-action@v0
         with:
           format: spdx-json
           artifact-name: sbom.spdx.json
 
-      # Ref: https://github.com/goreleaser/goreleaser-action
+      # See: https://github.com/goreleaser/goreleaser-action
       - name: "Release"
         uses: goreleaser/goreleaser-action@v6
         with:

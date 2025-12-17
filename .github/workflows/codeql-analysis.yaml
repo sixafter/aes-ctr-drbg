@@ -59,19 +59,19 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common ca-certificates gnupg-agent curl build-essential make
 
-      # Ref: https://github.com/actions/checkout
+      # See: https://github.com/actions/checkout
       - name: Checkout Source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      # Ref: https://github.com/actions/setup-go
+      # See: https://github.com/actions/setup-go
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
-      # Ref: https://github.com/github/codeql-action
+      # See: https://github.com/github/codeql-action
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:

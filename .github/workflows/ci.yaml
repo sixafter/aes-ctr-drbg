@@ -24,7 +24,7 @@ on:
       - 'LICENSE'
       - '**/*.md'
 
-# Declare default permissions as read only.
+# Declare default permissions as read-only.
 permissions: read-all
 
 jobs:
@@ -50,19 +50,19 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common ca-certificates gnupg-agent curl build-essential make
 
-      # Ref: https://github.com/actions/checkout
+      # See: https://github.com/actions/checkout
       - name: Checkout Source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      # Ref: https://github.com/actions/setup-go
+      # See: https://github.com/actions/setup-go
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
-      # Ref: https://github.com/golangci/golangci-lint-action
+      # See: https://github.com/golangci/golangci-lint-action
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -84,9 +84,9 @@ jobs:
         run: |
           make analyze          
 
-      # Ref: https://github.com/SonarSource/sonarqube-scan-action
+      # See: https://github.com/SonarSource/sonarqube-scan-action
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_USER: ${{ github.actor }}
