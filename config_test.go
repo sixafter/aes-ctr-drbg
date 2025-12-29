@@ -212,3 +212,57 @@ func TestConfig_WithForkDetectionInterval(t *testing.T) {
 	WithForkDetectionInterval(42)(&cfg)
 	is.Equal(uint64(42), cfg.ForkDetectionInterval, "WithForkDetectionInterval should set ForkDetectionInterval")
 }
+
+// TestConfig_WithReseedRequests_Clamping verifies that WithReseedRequests clamps values exceeding 2^48.
+func TestConfig_WithReseedRequests_Clamping(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+
+	// Value within limit should be set as-is
+	WithReseedRequests(1000)(&cfg)
+	is.Equal(uint64(1000), cfg.ReseedRequests, "Values within limit should be set as-is")
+
+	// Value at exactly 2^48 should be set as-is
+	WithReseedRequests(1 << 48)(&cfg)
+	is.Equal(uint64(1<<48), cfg.ReseedRequests, "Value at 2^48 should be set as-is")
+
+	// Value exceeding 2^48 should be clamped
+	WithReseedRequests((1 << 48) + 1)(&cfg)
+	is.Equal(uint64(1<<48), cfg.ReseedRequests, "Value exceeding 2^48 should be clamped to 2^48")
+
+	// Very large value should be clamped
+	WithReseedRequests(^uint64(0))(&cfg) // max uint64
+	is.Equal(uint64(1<<48), cfg.ReseedRequests, "Max uint64 should be clamped to 2^48")
+}
+
+// TestConfig_WithSelfTests verifies that WithSelfTests sets the EnableSelfTests field.
+func TestConfig_WithSelfTests(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	is.False(cfg.EnableSelfTests, "EnableSelfTests should default to false")
+
+	WithSelfTests(true)(&cfg)
+	is.True(cfg.EnableSelfTests, "WithSelfTests(true) should set EnableSelfTests to true")
+
+	WithSelfTests(false)(&cfg)
+	is.False(cfg.EnableSelfTests, "WithSelfTests(false) should set EnableSelfTests to false")
+}
+
+// TestConfig_WithZeroization verifies that WithZeroization sets the EnableZeroization field.
+func TestConfig_WithZeroization(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	is.False(cfg.EnableZeroization, "EnableZeroization should default to false")
+
+	WithZeroization(true)(&cfg)
+	is.True(cfg.EnableZeroization, "WithZeroization(true) should set EnableZeroization to true")
+
+	WithZeroization(false)(&cfg)
+	is.False(cfg.EnableZeroization, "WithZeroization(false) should set EnableZeroization to false")
+}

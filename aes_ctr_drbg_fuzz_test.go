@@ -15,7 +15,8 @@ import (
 
 // Fuzz_Reader_Read exercises the Reader.Read method using a variety of buffer sizes.
 // It ensures that Read does not return an error and produces the requested number of bytes
-// for all valid sizes in the range [0, 65536]. Invalid sizes outside this range are skipped.
+// for all valid sizes in the range [0, 65536]. Sizes exceeding 65536 (64 KB) are skipped
+// as they exceed the NIST SP 800-90A max_number_of_bits_per_request limit.
 func Fuzz_Reader_Read(f *testing.F) {
 	for _, sz := range []int{0, 1, 15, 16, 17, 32, 64, 1024, 4096} {
 		f.Add(sz)
