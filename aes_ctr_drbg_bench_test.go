@@ -83,8 +83,9 @@ func BenchmarkDRBG_Read_Concurrent(b *testing.B) {
 }
 
 // BenchmarkDRBG_Read_LargeSizes_Sequential benchmarks sequential Read performance for large buffer sizes.
+// Buffer sizes are capped at 64 KB per NIST SP 800-90A max_number_of_bits_per_request.
 func BenchmarkDRBG_Read_LargeSizes_Sequential(b *testing.B) {
-	largeBufferSizes := []int{4096, 16384, 65536, 1048576}
+	largeBufferSizes := []int{4096, 16384, 65536}
 	for _, size := range largeBufferSizes {
 		b.Run(fmt.Sprintf("Serial_Read_Large_%dBytes", size), func(b *testing.B) {
 			buffer := make([]byte, size)
@@ -102,8 +103,9 @@ func BenchmarkDRBG_Read_LargeSizes_Sequential(b *testing.B) {
 
 // BenchmarkDRBG_Read_LargeSizes_Concurrent benchmarks concurrent Read performance
 // for large buffer sizes and multiple goroutines.
+// Buffer sizes are capped at 64 KB per NIST SP 800-90A max_number_of_bits_per_request.
 func BenchmarkDRBG_Read_LargeSizes_Concurrent(b *testing.B) {
-	largeBufferSizes := []int{4096, 16384, 65536, 1048576}
+	largeBufferSizes := []int{4096, 16384, 65536}
 	goroutineCounts := []int{2, 4, 8, 16, 32, 64, 128}
 	for _, size := range largeBufferSizes {
 		for _, gc := range goroutineCounts {
@@ -170,7 +172,9 @@ func BenchmarkDRBG_Read_VariableSizes_Concurrent(b *testing.B) {
 
 // BenchmarkDRBG_Read_ExtremeSizes benchmarks Read performance for very large buffer sizes
 // (10MB, 50MB, 100MB) both serially and concurrently.
+// Reads are performed in 64 KB chunks per NIST SP 800-90A max_number_of_bits_per_request.
 func BenchmarkDRBG_Read_ExtremeSizes(b *testing.B) {
+	const chunkSize = 65536                                    // 64 KB (NIST max)
 	extremeBufferSizes := []int{10485760, 52428800, 104857600} // 10MB, 50MB, 100MB
 	for _, size := range extremeBufferSizes {
 		// Serial
@@ -179,9 +183,16 @@ func BenchmarkDRBG_Read_ExtremeSizes(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, err := Reader.Read(buffer)
-				if err != nil {
-					b.Fatalf("Read failed: %v", err)
+				// Read in 64 KB chunks
+				for offset := 0; offset < size; offset += chunkSize {
+					end := offset + chunkSize
+					if end > size {
+						end = size
+					}
+					_, err := Reader.Read(buffer[offset:end])
+					if err != nil {
+						b.Fatalf("Read failed: %v", err)
+					}
 				}
 			}
 		})
@@ -195,9 +206,16 @@ func BenchmarkDRBG_Read_ExtremeSizes(b *testing.B) {
 				b.ResetTimer()
 				b.RunParallel(func(pb *testing.PB) {
 					for pb.Next() {
-						_, err := Reader.Read(buffer)
-						if err != nil {
-							b.Fatalf("Read failed: %v", err)
+						// Read in 64 KB chunks
+						for offset := 0; offset < size; offset += chunkSize {
+							end := offset + chunkSize
+							if end > size {
+								end = size
+							}
+							_, err := Reader.Read(buffer[offset:end])
+							if err != nil {
+								b.Fatalf("Read failed: %v", err)
+							}
 						}
 					}
 				})

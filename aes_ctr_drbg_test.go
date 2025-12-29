@@ -9,7 +9,6 @@ package ctrdrbg
 
 import (
 	"bytes"
-	"io"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -155,6 +154,7 @@ outer:
 }
 
 // Test_CTRDRBG_Stream verifies that large sequential reads (1 MiB) produce random, nonzero output.
+// Reads are performed in chunks of 64 KB to comply with NIST SP 800-90A max_number_of_bits_per_request.
 func Test_CTRDRBG_Stream(t *testing.T) {
 	t.Parallel()
 	is := assert.New(t)
@@ -162,11 +162,20 @@ func Test_CTRDRBG_Stream(t *testing.T) {
 	rdr, err := NewReader()
 	is.NoError(err)
 
-	const total = 1 << 20 // 1 MiB
+	const total = 1 << 20     // 1 MiB
+	const chunkSize = 1 << 16 // 64 KB (NIST max)
 	buf := make([]byte, total)
-	n, err := io.ReadFull(rdr, buf)
-	is.NoError(err)
-	is.Equal(total, n)
+
+	// Read in 64 KB chunks
+	for offset := 0; offset < total; offset += chunkSize {
+		end := offset + chunkSize
+		if end > total {
+			end = total
+		}
+		n, err := rdr.Read(buf[offset:end])
+		is.NoError(err)
+		is.Equal(end-offset, n)
+	}
 
 	allZeros := true
 	for _, b := range buf {
@@ -628,4 +637,204 @@ func Test_CTRDRBG_InitShardPools_Failure(t *testing.T) {
 	pools, err := initShardPools(cfg)
 	is.Error(err, "initShardPools should return error on initialization failure")
 	is.Nil(pools, "pools should be nil when initialization fails")
+}
+
+// Test_DRBG_Read_MaxRequestSize verifies that Read rejects requests exceeding 64 KB.
+func Test_DRBG_Read_MaxRequestSize(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	rdr, err := NewReader()
+	is.NoError(err)
+
+	// Exactly 64 KB should succeed
+	buf64KB := make([]byte, 1<<16)
+	n, err := rdr.Read(buf64KB)
+	is.NoError(err, "Read of exactly 64 KB should succeed")
+	is.Equal(1<<16, n, "Should read exactly 64 KB")
+
+	// 64 KB + 1 byte should fail
+	bufTooLarge := make([]byte, (1<<16)+1)
+	n, err = rdr.Read(bufTooLarge)
+	is.Error(err, "Read exceeding 64 KB should fail")
+	is.Equal(ErrRequestTooLarge, err, "Should return ErrRequestTooLarge")
+	is.Equal(0, n, "Should return 0 bytes on error")
+}
+
+// Test_DRBG_ReadWithAdditionalInput_MaxRequestSize verifies that ReadWithAdditionalInput
+// rejects requests exceeding 64 KB.
+func Test_DRBG_ReadWithAdditionalInput_MaxRequestSize(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	d, err := newDRBG(&cfg)
+	is.NoError(err)
+
+	// Exactly 64 KB should succeed
+	buf64KB := make([]byte, 1<<16)
+	n, err := d.ReadWithAdditionalInput(buf64KB, nil)
+	is.NoError(err, "ReadWithAdditionalInput of exactly 64 KB should succeed")
+	is.Equal(1<<16, n, "Should read exactly 64 KB")
+
+	// 64 KB + 1 byte should fail
+	bufTooLarge := make([]byte, (1<<16)+1)
+	n, err = d.ReadWithAdditionalInput(bufTooLarge, nil)
+	is.Error(err, "ReadWithAdditionalInput exceeding 64 KB should fail")
+	is.Equal(ErrRequestTooLarge, err, "Should return ErrRequestTooLarge")
+	is.Equal(0, n, "Should return 0 bytes on error")
+}
+
+// Test_AsyncRekey_WithZeroization_Enabled verifies that old key material is zeroized during rekey.
+func Test_AsyncRekey_WithZeroization_Enabled(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	cfg.MaxBytesPerKey = 64
+	cfg.RekeyBackoff = 10 * time.Millisecond
+	cfg.MaxRekeyAttempts = 3
+	cfg.MaxInitRetries = 3
+	cfg.EnableKeyRotation = true
+	cfg.EnableZeroization = true
+
+	d, err := newDRBG(&cfg)
+	is.NoError(err)
+
+	// Capture the initial state
+	initialState := d.state.Load()
+	is.NotNil(initialState)
+
+	// Trigger rekey by exceeding MaxBytesPerKey
+	buf := make([]byte, 128)
+	_, err = d.Read(buf)
+	is.NoError(err)
+
+	// Wait for async rekey to complete
+	wait := time.NewTimer(500 * time.Millisecond)
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer wait.Stop()
+	defer tick.Stop()
+
+	rekeyCompleted := false
+	for !rekeyCompleted {
+		select {
+		case <-tick.C:
+			currState := d.state.Load()
+			if currState != initialState && atomic.LoadUint64(&d.usage) == 0 {
+				rekeyCompleted = true
+			}
+		case <-wait.C:
+			t.Fatal("Timed out waiting for asyncRekey to complete")
+		}
+	}
+
+	// Verify old state key was zeroized
+	allZero := true
+	for _, b := range initialState.key {
+		if b != 0 {
+			allZero = false
+			break
+		}
+	}
+	is.True(allZero, "Old key should be zeroized after rekey")
+
+	// Verify old state v was zeroized
+	allZero = true
+	for _, b := range initialState.v {
+		if b != 0 {
+			allZero = false
+			break
+		}
+	}
+	is.True(allZero, "Old state.v should be zeroized after rekey")
+}
+
+// Test_AsyncRekey_WithZeroization_Disabled verifies that old key material is NOT zeroized when disabled.
+func Test_AsyncRekey_WithZeroization_Disabled(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	cfg.MaxBytesPerKey = 64
+	cfg.RekeyBackoff = 10 * time.Millisecond
+	cfg.MaxRekeyAttempts = 3
+	cfg.MaxInitRetries = 3
+	cfg.EnableKeyRotation = true
+	cfg.EnableZeroization = false
+
+	d, err := newDRBG(&cfg)
+	is.NoError(err)
+
+	// Capture the initial state
+	initialState := d.state.Load()
+	is.NotNil(initialState)
+
+	// Save a copy of the original key to compare after rekey
+	originalKey := initialState.key
+
+	// Trigger rekey by exceeding MaxBytesPerKey
+	buf := make([]byte, 128)
+	_, err = d.Read(buf)
+	is.NoError(err)
+
+	// Wait for async rekey to complete
+	wait := time.NewTimer(500 * time.Millisecond)
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer wait.Stop()
+	defer tick.Stop()
+
+	rekeyCompleted := false
+	for !rekeyCompleted {
+		select {
+		case <-tick.C:
+			currState := d.state.Load()
+			if currState != initialState && atomic.LoadUint64(&d.usage) == 0 {
+				rekeyCompleted = true
+			}
+		case <-wait.C:
+			t.Fatal("Timed out waiting for asyncRekey to complete")
+		}
+	}
+
+	// Verify old state key was NOT zeroized (should still have original value)
+	is.Equal(originalKey, initialState.key, "Old key should NOT be zeroized when EnableZeroization is false")
+}
+
+// Test_NewReader_WithZeroization_Enabled verifies that NewReader accepts WithZeroization option.
+func Test_NewReader_WithZeroization_Enabled(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	rdr, err := NewReader(WithZeroization(true))
+	is.NoError(err, "NewReader should succeed with zeroization enabled")
+	is.NotNil(rdr, "Reader should be returned")
+
+	cfg := rdr.Config()
+	is.True(cfg.EnableZeroization, "EnableZeroization should be true")
+}
+
+// Test_NewReader_WithZeroization_Disabled verifies that NewReader accepts WithZeroization option.
+func Test_NewReader_WithZeroization_Disabled(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	rdr, err := NewReader(WithZeroization(false))
+	is.NoError(err, "NewReader should succeed with zeroization disabled")
+	is.NotNil(rdr, "Reader should be returned")
+
+	cfg := rdr.Config()
+	is.False(cfg.EnableZeroization, "EnableZeroization should be false")
+}
+
+// Test_NewReader_Zeroization_DefaultDisabled verifies that zeroization is disabled by default.
+func Test_NewReader_Zeroization_DefaultDisabled(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	rdr, err := NewReader()
+	is.NoError(err, "NewReader should succeed with defaults")
+
+	cfg := rdr.Config()
+	is.False(cfg.EnableZeroization, "EnableZeroization should default to false")
 }

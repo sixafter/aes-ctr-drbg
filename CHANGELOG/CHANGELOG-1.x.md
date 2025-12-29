@@ -12,8 +12,24 @@ Date format: `YYYY-MM-DD`
 
 ### Added
 ### Changed
-- **debt:** Upgraded all dependencies to their latest stable versions.
-- **risk:** Add retry logic to signature verification make target to handle transient network errors.
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+---
+
+## [1.15.0] - 2025-12-29
+
+
+### Added
+- **feature:** Added `WithSelfTests` option to enable FIPS 140-2 Known Answer Test (KAT) self-tests at DRBG initialization using NIST CAVP vectors.
+- **feature:** Added `WithZeroization` option to enable secure erasure of old key material during key rotation for forward secrecy (FIPS 140-2 §4.7.6 compliance).
+
+### Changed
+- **risk:** Added 64 KB maximum request size limit per DRBG call to comply with NIST SP 800-90A §10.2.1.
+- **risk:** Clamped user-configured reseed interval to a maximum of 2^48 requests per NIST SP 800-90A §10.2.1.1.
+- **debt:** Updated NIST SP 800-90A specification mapping table in documentation to reflect new FIPS compliance features (max request size, reseed interval cap, KATs, and key zeroization).
 
 ### Deprecated
 ### Removed
@@ -193,7 +209,7 @@ Date format: `YYYY-MM-DD`
 
 ### Added
 ### Changed
-- **feature:** Prediction resistance mode (`WithPredictionResistance`), enabling NIST SP 800-90A Section 9.3 compliance by reseeding before every output.
+- **feature:** Prediction resistance mode (`WithPredictionResistance`), enabling NIST SP 800-90A §9.3 compliance by reseeding before every output.
 - **feature:** Automatic interval-based reseeding (`WithReseedInterval`) and reseed-on-request-count (`WithReseedRequests`) options.
 - **feature:** Added `ReadWithAdditionalInput([]byte)` method for supplying per-call additional input as permitted by the NIST SP 800-90A standard.
 - **feature:** Added `Reseed([]byte)` method to manually reseed a DRBG instance with new entropy.
@@ -264,7 +280,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.5...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.5...v1.15.0
 [1.14.5]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.1...v1.14.5
 [1.14.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.13.0...v1.14.0
