@@ -14,7 +14,6 @@
 
 [![CI](https://github.com/sixafter/aes-ctr-drbg/workflows/ci/badge.svg)](https://github.com/sixafter/aes-ctr-drbg/actions)
 [![GitHub issues](https://img.shields.io/github/issues/sixafter/aes-ctr-drbg)](https://github.com/sixafter/aes-ctr-drbg/issues)
-![GitHub last commit](https://img.shields.io/github/last-commit/sixafter/aes-ctr-drbg)
 
 ### Quality
 
