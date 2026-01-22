@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Six After, Inc
+// Copyright (c) 2024-2026 Six After, Inc
 //
 // This source code is licensed under the Apache 2.0 License found in the
 // LICENSE file in the root directory of this source tree.
@@ -265,4 +265,19 @@ func TestConfig_WithZeroization(t *testing.T) {
 
 	WithZeroization(false)(&cfg)
 	is.False(cfg.EnableZeroization, "WithZeroization(false) should set EnableZeroization to false")
+}
+
+// TestConfig_WithContinuousHealthTest verifies that WithContinuousHealthTest sets the ContinuousHealthTest field.
+func TestConfig_WithContinuousHealthTest(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	is.False(cfg.ContinuousHealthTest, "ContinuousHealthTest should default to false")
+
+	WithContinuousHealthTest(true)(&cfg)
+	is.True(cfg.ContinuousHealthTest, "WithContinuousHealthTest(true) should set ContinuousHealthTest to true")
+
+	WithContinuousHealthTest(false)(&cfg)
+	is.False(cfg.ContinuousHealthTest, "WithContinuousHealthTest(false) should set ContinuousHealthTest to false")
 }
