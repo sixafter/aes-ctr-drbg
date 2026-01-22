@@ -98,10 +98,11 @@ See [FIPS‑140.md](FIPS-140.md) for compliance, deployment, and configuration g
 
 For an example of how this library can be consumed in practice, see [sixafter/nanoid](https://github.com/sixafter/nanoid).
 
-NanoID uses [sixafter/prng-chacha](https://github.com/sixafter/prng-chacha) as its default high-performance RNG, but
-can also use **`aes-ctr-drbg`** when FIPS 140-2/3 alignment or deterministic AES-CTR-based randomness is required. This provides a clear, real-world example of integrating this DRBG into an ID-generation workflow,
-including optional FIPS-centric operation. There is also a [WithAutoRandReader()](https://github.com/sixafter/nanoid/blob/d8efbc63e5a5696a33f34b9fb5d24f5d7805a7ed/config.go#L229) option that automatically selects 
-between `prng-chacha` and `aes-ctr-drbg` based on the runtime FIPS mode.
+NanoID uses [sixafter/prng-chacha](https://github.com/sixafter/prng-chacha) as its default high-performance PRNG, but  can also use **`aes-ctr-drbg`** when 
+FIPS 140-2/3 alignment or deterministic AES-CTR-based randomness is required. This provides a clear, real-world example 
+of integrating this DRBG into an ID-generation workflow, including optional FIPS-centric operation. There is also a 
+[WithAutoRandReader()](https://github.com/sixafter/nanoid/blob/d8efbc63e5a5696a33f34b9fb5d24f5d7805a7ed/config.go#L229) option that automatically selects between `prng-chacha` and `aes-ctr-drbg` based on the 
+runtime FIPS mode.
 
 ## NIST SP 800-90A Compliance
 
@@ -116,10 +117,10 @@ For a detailed mapping between the implementation and NIST SP 800-90A requiremen
 To verify the integrity of the release tarball, you can use Cosign to check the signature and checksums. Follow these steps:
 
 ```sh
-# Fetch the latest release tag from GitHub API (e.g., "v1.15.0")
+# Fetch the latest release tag from GitHub API (e.g., "v1.16.0")
 TAG=$(curl -s https://api.github.com/repos/sixafter/aes-ctr-drbg/releases/latest | jq -r .tag_name)
 
-# Remove leading "v" for filenames (e.g., "v1.15.0" -> "1.15.0")
+# Remove leading "v" for filenames (e.g., "v1.16.0" -> "1.16.0")
 VERSION=${TAG#v}
 
 # ---------------------------------------------------------------------

@@ -19,6 +19,23 @@ Date format: `YYYY-MM-DD`
 
 ---
 
+## [1.16.0] - 2026-01-22
+
+
+### Added
+- **feature:** Added `WithContinuousHealthTest` option to enable NIST SP 800-90A §11.3.3 continuous health testing for FIPS 140-2/140-3 compliance (detects stuck DRBG output).
+
+### Changed
+- **debt:** Minor clarifications in [README.md](../README.md) regarding FIPS 140-2 compliance features.
+- **debt:** Upgraded copyright notice to include 2026.
+
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+---
+
 ## [1.15.0] - 2025-12-29
 
 
@@ -280,7 +297,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.5...v1.15.0
 [1.14.5]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.1...v1.14.5
 [1.14.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.14.0...v1.14.1
