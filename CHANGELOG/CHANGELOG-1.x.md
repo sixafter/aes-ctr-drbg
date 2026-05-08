@@ -19,6 +19,19 @@ Date format: `YYYY-MM-DD`
 
 ---
 
+## [1.19.1] - 2026-05-08
+
+### Added
+### Changed
+- **debt:** Upgraded dependencies to latest stable versions.
+
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+---
+
 ## [1.19.0] - 2026-03-26
 
 ### Added
@@ -337,7 +350,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.19.0...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.19.1...HEAD
+[1.19.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.19.0...v1.19.1
 [1.19.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.16.0...v1.17.0
