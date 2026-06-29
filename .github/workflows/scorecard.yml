@@ -39,7 +39,7 @@ jobs:
     steps:
       # See: https://github.com/actions/checkout
       - name: "Checkout code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
