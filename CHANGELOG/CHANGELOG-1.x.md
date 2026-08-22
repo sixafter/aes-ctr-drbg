@@ -16,6 +16,19 @@ Date format: `YYYY-MM-DD`
 ### Removed
 ### Fixed
 ### Security
+---
+
+## [1.20.0] - 2026-08-22
+
+### Added
+### Changed
+- **debt:** Upgraded to [Go 1.27](https://go.dev/doc/go1.27).
+- **debt:** Upgraded dependencies to their latest stable versions.
+
+### Deprecated
+### Removed
+### Fixed
+### Security
 
 ---
 
@@ -376,7 +389,8 @@ Date format: `YYYY-MM-DD`
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.19.3...HEAD
+[Unreleased]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.20.0...HEAD
+[1.20.0]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.19.3...v1.20.0
 [1.19.3]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.19.2...v1.19.3
 [1.19.2]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.19.1...v1.19.2
 [1.19.1]: https://github.com/sixafter/aes-ctr-drbg/compare/v1.19.0...v1.19.1
