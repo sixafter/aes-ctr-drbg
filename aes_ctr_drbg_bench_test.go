@@ -258,3 +258,18 @@ func BenchmarkDRBG_Read_PredictionResistance(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkDRBG_Read_BacktrackingResistance benchmarks Read throughput and allocation overhead
+// with the NIST SP 800-90A §10.2.1.5.1 step 6 post-generate update enabled (rekeying every output).
+func BenchmarkDRBG_Read_BacktrackingResistance(b *testing.B) {
+	r, _ := NewReader(WithBacktrackingResistance(true))
+	buf := make([]byte, 64)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := r.Read(buf)
+		if err != nil {
+			b.Fatalf("Read failed: %v", err)
+		}
+	}
+}
