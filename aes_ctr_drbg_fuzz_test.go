@@ -146,6 +146,7 @@ func Fuzz_NewReader_AllOptions(f *testing.F) {
 			WithKeySize(keySize),
 			WithUseZeroBuffer(zeroBuffer),
 			WithPersonalization(personalization),
+			WithBacktrackingResistance(mode%3 == 0),
 			WithRekeyBackoff(time.Duration(rand.Intn(1000)) * time.Millisecond),
 			WithMaxRekeyBackoff(time.Duration(rand.Intn(3000)) * time.Millisecond),
 		}
@@ -235,8 +236,9 @@ func Fuzz_ReadWithAdditionalInput(f *testing.F) {
 		n, err := r.ReadWithAdditionalInput(buf, addIn)
 		is.NoError(err, "ReadWithAdditionalInput failed")
 		is.Equal(bufSize, n, "short read")
-		if bufSize > 0 {
-			// Ensure not all zeros (statistically, not guaranteed but good quick check)
+		// An all-zero result is a plausible random outcome for small buffers (1 in 256 for one byte),
+		// so only check buffers of at least 8 bytes.
+		if bufSize >= 8 {
 			zeros := true
 			for _, b := range buf {
 				if b != 0 {

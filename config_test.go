@@ -281,3 +281,18 @@ func TestConfig_WithContinuousHealthTest(t *testing.T) {
 	WithContinuousHealthTest(false)(&cfg)
 	is.False(cfg.ContinuousHealthTest, "WithContinuousHealthTest(false) should set ContinuousHealthTest to false")
 }
+
+// TestConfig_WithBacktrackingResistance verifies that WithBacktrackingResistance sets the BacktrackingResistance field.
+func TestConfig_WithBacktrackingResistance(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	cfg := DefaultConfig()
+	is.False(cfg.BacktrackingResistance, "BacktrackingResistance should default to false")
+
+	WithBacktrackingResistance(true)(&cfg)
+	is.True(cfg.BacktrackingResistance, "WithBacktrackingResistance(true) should set BacktrackingResistance to true")
+
+	WithBacktrackingResistance(false)(&cfg)
+	is.False(cfg.BacktrackingResistance, "WithBacktrackingResistance(false) should set BacktrackingResistance to false")
+}
